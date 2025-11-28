@@ -1,9 +1,12 @@
+
 export enum VerdictType {
   VERIFIED = 'VERIFIED',
   MISLEADING = 'MISLEADING',
   FALSE = 'FALSE',
   UNCERTAIN = 'UNCERTAIN',
-  OPINION = 'OPINION'
+  OPINION = 'OPINION',
+  OUTDATED = 'OUTDATED',
+  NOT_RECENT = 'NOT_RECENT'
 }
 
 export enum SourceCategory {
@@ -27,6 +30,21 @@ export interface KeyEvidence {
   type: 'SUPPORTING' | 'CONTRADICTING';
 }
 
+export interface EvolutionStage {
+  stage: number;
+  platform: string;
+  timestamp: string;
+  variant: string;
+  distortionScore: number;
+}
+
+export interface SocialAnalysis {
+    sentiment: 'ANGRY' | 'FEARFUL' | 'HAPPY' | 'NEUTRAL' | 'DIVIDED';
+    score: number; // 0 (Negative) - 100 (Positive)
+    topNarrative: string; // "People are saying..."
+    hotSpots: string[]; // Platforms e.g., ["Twitter", "Reddit"]
+}
+
 export interface Report {
   id: string;
   timestamp: number;
@@ -35,13 +53,16 @@ export interface Report {
   verdict: VerdictType;
   summary: string;
   confidenceScore: number;
-  sourceReliability: number; // Aggregate reliability of used sources
+  sourceReliability: number;
   sources: Source[];
   tags: string[];
-  originSector: string; // Where this topic was found (e.g. "Academic Database")
-  detectedLanguage?: string; // e.g. "Hindi", "Marathi", "English"
-  keyEvidence: KeyEvidence[]; // New field for CoVe (Chain of Verification)
-  relatedThemes: string[]; // For Graph Clustering (e.g. "Election Fraud", "Climate Denial")
+  originSector: string;
+  detectedLanguage?: string;
+  keyEvidence: KeyEvidence[];
+  relatedThemes: string[];
+  entities: string[];
+  evolutionTrace?: EvolutionStage[];
+  socialPulse?: SocialAnalysis; // NEW FIELD
 }
 
 export enum AgentStatus {

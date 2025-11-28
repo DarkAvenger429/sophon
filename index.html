@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" class="dark">
   <head>
@@ -28,7 +29,8 @@
             animation: {
               'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'scan-line': 'scan 2s linear infinite',
-              'marquee': 'marquee 30s linear infinite',
+              'marquee': 'marquee 160s linear infinite',
+              'fadeIn': 'fadeIn 0.5s ease-out',
             },
             keyframes: {
               scan: {
@@ -38,6 +40,10 @@
               marquee: {
                 '0%': { transform: 'translateX(0%)' },
                 '100%': { transform: 'translateX(-100%)' },
+              },
+              fadeIn: {
+                '0%': { opacity: '0', transform: 'translateY(10px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
               }
             }
           },
@@ -57,6 +63,21 @@
         -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0a0a0a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #333;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #00f0ff;
+      }
       .scrollbar-hide::-webkit-scrollbar {
           display: none;
       }
@@ -64,16 +85,58 @@
           -ms-overflow-style: none;
           scrollbar-width: none;
       }
+
+      /* ACCESSIBILITY OVERRIDES (HIGH CONTRAST MODE) */
+      body.high-contrast {
+        background-color: #000000 !important;
+        color: #ffffff !important;
+      }
+      body.high-contrast * {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        text-shadow: none !important;
+        box-shadow: none !important;
+        animation: none !important; /* Stop all motion */
+        transition: none !important;
+      }
+      body.high-contrast .glass-panel {
+        background: #000000 !important;
+        border: 2px solid #ffffff !important;
+      }
+      body.high-contrast .text-gray-500, 
+      body.high-contrast .text-gray-400, 
+      body.high-contrast .text-gray-600 {
+        color: #e0e0e0 !important; /* Increase contrast of muted text */
+      }
+      /* Ensure links/buttons stand out */
+      body.high-contrast button, 
+      body.high-contrast a {
+        text-decoration: underline !important;
+        border-width: 1px !important;
+      }
+      /* Keyboard Focus Outline */
+      body.high-contrast *:focus-visible {
+        outline: 4px solid #ffffff !important;
+        outline-offset: 2px !important;
+      }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-    "vite": "https://aistudiocdn.com/vite@^7.2.4"
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "express": "https://aistudiocdn.com/express@^5.1.0",
+    "dotenv": "https://aistudiocdn.com/dotenv@^17.2.3",
+    "body-parser": "https://aistudiocdn.com/body-parser@^2.2.1",
+    "twilio": "https://aistudiocdn.com/twilio@^5.10.6",
+    "whatsapp-web.js": "https://aistudiocdn.com/whatsapp-web.js@^1.34.2",
+    "qrcode-terminal": "https://aistudiocdn.com/qrcode-terminal@^0.12.0",
+    "axios": "https://aistudiocdn.com/axios@^1.13.2",
+    "ethers": "https://aistudiocdn.com/ethers@^6.15.0"
   }
 }
 </script>
