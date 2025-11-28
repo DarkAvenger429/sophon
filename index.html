@@ -1,16 +1,1130 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+  <meta charset="UTF-8" />
+  <title>Misinformation Detection Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #050816;
+      --bg-soft: #0b1020;
+      --card: #111827;
+      --accent: #6366f1;
+      --accent-soft: rgba(99, 102, 241, 0.1);
+      --danger: #f97373;
+      --safe: #22c55e;
+      --warn: #eab308;
+      --border: #1f2937;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --radius-lg: 18px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.5);
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font);
+      background: radial-gradient(circle at top, #1d243b 0, #050816 45%, #020617 100%);
+      color: var(--text);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .app {
+      max-width: 1120px;
+      width: 100%;
+      background: linear-gradient(145deg, rgba(15,23,42,0.96), rgba(2,6,23,0.96));
+      border-radius: 24px;
+      border: 1px solid rgba(148,163,184,0.25);
+      box-shadow: var(--shadow-soft);
+      padding: 24px 26px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(31,41,55,0.9);
+    }
+
+    .title-block h1 {
+      font-size: 1.6rem;
+      margin: 0 0 4px;
+      letter-spacing: 0.03em;
+    }
+
+    .title-block h1 span {
+      background: linear-gradient(135deg, #4f46e5, #8b5cf6, #06b6d4);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .title-block p {
+      margin: 0;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    .pill-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid rgba(148,163,184,0.55);
+      color: #e5e7eb;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .pill-label-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #4ade80, #22c55e);
+      box-shadow: 0 0 8px rgba(74,222,128,0.8);
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    @media (max-width: 840px) {
+      main {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      body {
+        padding: 16px;
+      }
+      .app {
+        padding: 18px 16px 16px;
+      }
+    }
+
+    .card {
+      background: radial-gradient(circle at top, rgba(15,23,42,1), rgba(15,23,42,0.98));
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(55,65,81,0.8);
+      padding: 14px 14px 16px;
+      box-shadow: 0 10px 30px rgba(15,23,42,0.7);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 0.98rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #cbd5f5;
+    }
+
+    .card-header small {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .input-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tabs {
+      display: inline-flex;
+      padding: 3px;
+      border-radius: 999px;
+      background: rgba(15,23,42,0.9);
+      border: 1px solid rgba(55,65,81,0.9);
+      gap: 2px;
+    }
+
+    .tab-button {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.74rem;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+    }
+
+    .tab-button span.icon {
+      font-size: 0.9rem;
+    }
+
+    .tab-button.active {
+      background: radial-gradient(circle at top left, #4f46e5, #6366f1);
+      color: #e5e7eb;
+      box-shadow: 0 0 14px rgba(99,102,241,0.7);
+    }
+
+    .tab-button:not(.active):hover {
+      background: rgba(31,41,55,0.9);
+      color: #e5e7eb;
+    }
+
+    .panels {
+      margin-top: 6px;
+    }
+
+    .panel {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .panel.active {
+      display: flex;
+    }
+
+    label {
+      font-size: 0.78rem;
+      color: #d1d5db;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    label code {
+      background: rgba(15,23,42,1);
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid rgba(55,65,81,1);
+      color: var(--muted);
+    }
+
+    textarea,
+    input[type="url"] {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(55,65,81,1);
+      background: rgba(15,23,42,0.95);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 0.82rem;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+      transition: border 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    input[type="url"] {
+      min-height: auto;
+      height: 34px;
+    }
+
+    textarea:focus,
+    input[type="url"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(99,102,241,0.65);
+      background: #020617;
+    }
+
+    .helper-text {
+      font-size: 0.72rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .chips {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .chip {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(51,65,85,1);
+      background: rgba(15,23,42,0.9);
+      color: #9ca3af;
+    }
+
+    .image-dropzone {
+      position: relative;
+      border-radius: 16px;
+      border: 1px dashed rgba(75,85,99,1);
+      background: radial-gradient(circle at top left, rgba(30,64,175,0.2), rgba(15,23,42,0.9));
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: border 0.18s ease, background 0.18s ease, transform 0.1s ease;
+    }
+
+    .image-dropzone.dragover {
+      border-color: var(--accent);
+      background: radial-gradient(circle at top left, rgba(129,140,248,0.3), rgba(15,23,42,1));
+      transform: translateY(-1px);
+      box-shadow: 0 0 18px rgba(129,140,248,0.4);
+    }
+
+    .image-dropzone-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      background: rgba(15,23,42,0.9);
+    }
+
+    .image-dropzone-title {
+      font-size: 0.82rem;
+    }
+
+    .image-dropzone small {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .image-dropzone input[type="file"] {
+      display: none;
+    }
+
+    .selected-file {
+      margin-top: 4px;
+      font-size: 0.74rem;
+      color: var(--muted);
+      max-width: 100%;
+      word-break: break-all;
+    }
+
+    .actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .primary-btn {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      background: radial-gradient(circle at top left, #4f46e5, #6366f1);
+      color: white;
+      box-shadow: 0 10px 25px rgba(79,70,229,0.6);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+      white-space: nowrap;
+    }
+
+    .primary-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.04);
+      box-shadow: 0 16px 35px rgba(79,70,229,0.8);
+    }
+
+    .primary-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 8px 18px rgba(79,70,229,0.8);
+    }
+
+    .primary-btn[disabled] {
+      opacity: 0.7;
+      cursor: wait;
+      transform: none;
+      box-shadow: 0 5px 14px rgba(55,65,81,0.8);
+      filter: grayscale(0.1);
+    }
+
+    .primary-btn .spinner {
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      border: 2px solid rgba(226,232,240,0.3);
+      border-top-color: #e5e7eb;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .tiny-badge {
+      font-size: 0.7rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(55,65,81,0.9);
+      color: var(--muted);
+      background: rgba(15,23,42,1);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .tiny-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #22c55e, #16a34a);
+    }
+
+    /* RESULTS */
+
+    .results-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 440px;
+      overflow: hidden;
+    }
+
+    .placeholder {
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 6px 2px 4px;
+    }
+
+    .result-card {
+      margin-top: 4px;
+      background: radial-gradient(circle at top, #020617, #020617);
+      border-radius: var(--radius-lg);
+      border: 1px solid rgba(55,65,81,0.95);
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 10px;
+      min-height: 230px;
+    }
+
+    .result-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .verdict-pill {
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(148,163,184,0.7);
+    }
+
+    .verdict-pill strong {
+      font-weight: 600;
+    }
+
+    .verdict-pill.safe {
+      border-color: #22c55e;
+      background: radial-gradient(circle at top left, rgba(16,185,129,0.15), rgba(15,23,42,0.95));
+      color: #bbf7d0;
+    }
+
+    .verdict-pill.warn {
+      border-color: #eab308;
+      background: radial-gradient(circle at top left, rgba(234,179,8,0.15), rgba(15,23,42,0.95));
+      color: #fef3c7;
+    }
+
+    .verdict-pill.danger {
+      border-color: #f97373;
+      background: radial-gradient(circle at top left, rgba(248,113,113,0.18), rgba(15,23,42,0.98));
+      color: #fee2e2;
+    }
+
+    .verdict-pill .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: radial-gradient(circle, #f97316, #f97316);
+      box-shadow: 0 0 8px rgba(248,113,113,0.8);
+    }
+
+    .verdict-pill.safe .status-dot {
+      background: radial-gradient(circle, #22c55e, #16a34a);
+      box-shadow: 0 0 8px rgba(34,197,94,0.85);
+    }
+
+    .verdict-pill.warn .status-dot {
+      background: radial-gradient(circle, #eab308, #facc15);
+      box-shadow: 0 0 8px rgba(234,179,8,0.85);
+    }
+
+    .confidence-wrapper {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .confidence-bar {
+      flex: 1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(31,41,55,1);
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #22c55e, #eab308, #f97373);
+      transition: width 0.5s ease;
+    }
+
+    .confidence-score {
+      min-width: 40px;
+      text-align: right;
+    }
+
+    .summary {
+      font-size: 0.8rem;
+      color: #e5e7eb;
+      line-height: 1.5;
+    }
+
+    .flags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .flag {
+      font-size: 0.7rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(30,64,175,0.25);
+      border: 1px solid rgba(37,99,235,0.7);
+      color: #bfdbfe;
+    }
+
+    .checks {
+      margin-top: 4px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(31,41,55,1);
+      font-size: 0.76rem;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 96px;
+      overflow-y: auto;
+    }
+
+    .check-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .check-row span:nth-child(1) {
+      color: #d1d5db;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .badge-row .badge {
+      font-size: 0.7rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(55,65,81,1);
+      color: var(--muted);
+    }
+
+    .json-view {
+      margin-top: 6px;
+      font-size: 0.68rem;
+      background: rgba(15,23,42,1);
+      border-radius: 10px;
+      border: 1px solid rgba(31,41,55,1);
+      padding: 6px 7px;
+      max-height: 120px;
+      overflow: auto;
+      color: #9ca3af;
+    }
+
+    .json-view code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      white-space: pre;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    footer {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(31,41,55,1);
+      font-size: 0.7rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    footer a {
+      color: #a5b4fc;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
-
 <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-</body>
+  <div class="app">
+    <header>
+      <div class="title-block">
+        <h1><span>Misinformation Radar</span></h1>
+        <p>Analyse text, links, or images and get an instant credibility check powered by your ML engine.</p>
+      </div>
+      <div class="pill-label">
+        <span class="pill-label-dot"></span>
+        Real-time Analysis
+      </div>
+    </header>
 
+    <main>
+      <!-- LEFT: INPUT -->
+      <section class="card input-section">
+        <div class="card-header">
+          <h2>Input</h2>
+          <small>Choose what you want to analyse</small>
+        </div>
+
+        <div class="tabs" id="tabs">
+          <button class="tab-button active" data-tab="text">
+            <span class="icon">✍️</span>
+            Text
+          </button>
+          <button class="tab-button" data-tab="link">
+            <span class="icon">🔗</span>
+            Link / Article
+          </button>
+          <button class="tab-button" data-tab="image">
+            <span class="icon">🖼️</span>
+            Image
+          </button>
+        </div>
+
+        <div class="panels">
+          <!-- TEXT PANEL -->
+          <div class="panel active" id="panel-text">
+            <label for="text-input">
+              Paste text to check
+              <code>headline, tweet, statement...</code>
+            </label>
+            <textarea id="text-input" placeholder="Paste or type the content you want to fact-check here..."></textarea>
+            <div class="helper-text">
+              <span>We’ll check language patterns, claims, and source hints.</span>
+              <div class="chips">
+                <span class="chip">Clickbait</span>
+                <span class="chip">Hate / Fear</span>
+                <span class="chip">Sensational</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- LINK PANEL -->
+          <div class="panel" id="panel-link">
+            <label for="url-input">
+              Enter news/article URL
+              <code>https://example.com/story</code>
+            </label>
+            <input
+              type="url"
+              id="url-input"
+              placeholder="https://news.example.com/article"
+            />
+            <div class="helper-text">
+              <span>We’ll inspect the domain, metadata, and fetched article text.</span>
+            </div>
+          </div>
+
+          <!-- IMAGE PANEL -->
+          <div class="panel" id="panel-image">
+            <label>
+              Upload an image
+              <code>screenshots, memes, forwarded images...</code>
+            </label>
+            <div class="image-dropzone" id="image-dropzone">
+              <div class="image-dropzone-icon">📷</div>
+              <div class="image-dropzone-title">Drop image here or click to upload</div>
+              <small>Supported formats: JPG, PNG, WEBP · Max ~5MB (configurable)</small>
+              <input type="file" id="image-input" accept="image/*" />
+            </div>
+            <div class="selected-file" id="selected-file">No file selected.</div>
+          </div>
+        </div>
+
+        <div class="actions-row">
+          <button class="primary-btn" id="analyze-btn">
+            <div class="spinner hidden" id="btn-spinner"></div>
+            <span id="btn-label">Analyse</span>
+          </button>
+          <span class="tiny-badge">
+            <span class="tiny-dot"></span> Prototype UI · Not legal advice
+          </span>
+        </div>
+      </section>
+
+      <!-- RIGHT: RESULTS -->
+      <section class="results-section">
+        <div class="card">
+          <div class="card-header">
+            <h2>Analysis</h2>
+            <small>Model verdict & explanation</small>
+          </div>
+
+          <div class="placeholder" id="placeholder">
+            No analysis yet. Submit some text, a link, or an image to see the model’s verdict.
+          </div>
+
+          <div class="result-card hidden" id="result-card">
+            <div class="result-top">
+              <div class="verdict-pill" id="verdict-pill">
+                <span class="status-dot"></span>
+                <span><strong id="verdict-label">Pending</strong></span>
+              </div>
+              <div class="confidence-wrapper">
+                <span>Confidence</span>
+                <div class="confidence-bar">
+                  <div class="confidence-fill" id="confidence-fill"></div>
+                </div>
+                <span class="confidence-score" id="confidence-score">0%</span>
+              </div>
+            </div>
+
+            <div>
+              <p class="summary" id="summary">
+                <!-- Summary text goes here -->
+              </p>
+              <div class="flags" id="flags"></div>
+            </div>
+
+            <div>
+              <div class="checks" id="checks"></div>
+              <div class="badge-row" id="badges"></div>
+              <div class="json-view">
+                <code id="raw-json"></code>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>⚠️ This interface is a demo. Always cross-verify with trusted fact-checking sources.</span>
+      <span>Hook up your backend by replacing <code>mockAnalyze()</code> in the script below.</span>
+    </footer>
+  </div>
+
+  <script>
+    // ------------ TABS ------------
+    const tabButtons = document.querySelectorAll(".tab-button");
+    const panels = {
+      text: document.getElementById("panel-text"),
+      link: document.getElementById("panel-link"),
+      image: document.getElementById("panel-image"),
+    };
+
+    let activeTab = "text";
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+        if (tab === activeTab) return;
+
+        activeTab = tab;
+
+        tabButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        Object.entries(panels).forEach(([key, panel]) => {
+          panel.classList.toggle("active", key === tab);
+        });
+      });
+    });
+
+    // ------------ IMAGE DROPZONE ------------
+    const dropzone = document.getElementById("image-dropzone");
+    const imageInput = document.getElementById("image-input");
+    const selectedFileLabel = document.getElementById("selected-file");
+    let selectedFile = null;
+
+    function setSelectedFile(file) {
+      selectedFile = file;
+      selectedFileLabel.textContent = file
+        ? `Selected: ${file.name} (${Math.round(file.size / 1024)} KB)`
+        : "No file selected.";
+    }
+
+    dropzone.addEventListener("click", () => imageInput.click());
+
+    imageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) setSelectedFile(file);
+    });
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove("dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith("image/")) {
+        setSelectedFile(file);
+      }
+    });
+
+    // ------------ ANALYSIS UI ------------
+    const analyzeBtn = document.getElementById("analyze-btn");
+    const btnSpinner = document.getElementById("btn-spinner");
+    const btnLabel = document.getElementById("btn-label");
+    const placeholder = document.getElementById("placeholder");
+    const resultCard = document.getElementById("result-card");
+    const verdictPill = document.getElementById("verdict-pill");
+    const verdictLabel = document.getElementById("verdict-label");
+    const confidenceFill = document.getElementById("confidence-fill");
+    const confidenceScore = document.getElementById("confidence-score");
+    const summaryEl = document.getElementById("summary");
+    const flagsEl = document.getElementById("flags");
+    const checksEl = document.getElementById("checks");
+    const badgesEl = document.getElementById("badges");
+    const rawJsonEl = document.getElementById("raw-json");
+
+    function setLoading(isLoading) {
+      analyzeBtn.disabled = isLoading;
+      btnSpinner.classList.toggle("hidden", !isLoading);
+      btnLabel.textContent = isLoading ? "Analysing..." : "Analyse";
+    }
+
+    function getActivePayload() {
+      if (activeTab === "text") {
+        const text = document.getElementById("text-input").value.trim();
+        if (!text) throw new Error("Please paste some text to analyse.");
+        return { type: "text", text };
+      }
+
+      if (activeTab === "link") {
+        const url = document.getElementById("url-input").value.trim();
+        if (!url) throw new Error("Please enter a URL to analyse.");
+        return { type: "link", url };
+      }
+
+      if (activeTab === "image") {
+        if (!selectedFile) throw new Error("Please choose an image to analyse.");
+        return { type: "image", file: selectedFile };
+      }
+
+      throw new Error("Unknown input type.");
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ------------ MOCK / API HOOK ------------
+    /**
+     * Replace this function with your real API call.
+     *
+     * Example:
+     * const res = await fetch("/api/analyse", {
+     *   method: "POST",
+     *   headers: { "Content-Type": "application/json" },
+     *   body: JSON.stringify(payload)
+     * });
+     * const data = await res.json();
+     * return data;
+     */
+    async function mockAnalyze(payload) {
+      // Very simple deterministic-ish mock based on type
+      const base = {
+        inputType: payload.type,
+        timestamp: new Date().toISOString(),
+      };
+
+      if (payload.type === "text") {
+        const len = payload.text.length;
+        const hasAllCaps = /[A-Z]{6,}/.test(payload.text);
+        const hasClickbait = /(shocking|you won’t believe|breaking|urgent|share before)/i.test(
+          payload.text
+        );
+        const confidence = Math.min(0.97, 0.3 + len / 800 + (hasClickbait ? 0.2 : 0));
+
+        const verdict = hasClickbait
+          ? "Likely Misleading"
+          : hasAllCaps
+          ? "Potentially Misleading"
+          : "Likely Reliable";
+
+        return {
+          ...base,
+          verdict,
+          confidence,
+          summary:
+            verdict === "Likely Reliable"
+              ? "The language seems mostly neutral, with no obvious clickbait or emotional manipulation."
+              : "The statement uses emotionally charged or sensational language that often appears in misleading content.",
+          flags: [
+            hasClickbait && "Clickbait-style phrases detected",
+            hasAllCaps && "Excessive ALL-CAPS usage",
+            len < 60 && "Very short snippet – context is missing",
+          ].filter(Boolean),
+          checks: [
+            { label: "Language toxicity / emotion", score: hasClickbait || hasAllCaps ? 0.73 : 0.2 },
+            { label: "Claim specificity", score: len > 140 ? 0.65 : 0.4 },
+            { label: "Verifiability", score: 0.5 },
+          ],
+          meta: {
+            model: "misinfo-detector-text-v1",
+            latencyMs: 180,
+          },
+        };
+      }
+
+      if (payload.type === "link") {
+        const url = payload.url;
+        const isWeirdDomain = !/https?:\/\/(www\.)?(bbc|nytimes|reuters|thehindu|indianexpress|theguardian|apnews)\./i.test(
+          url
+        );
+        const isHttp = /^http:\/\//i.test(url);
+        const confidence = isWeirdDomain ? 0.84 : 0.62;
+
+        return {
+          ...base,
+          verdict: isWeirdDomain || isHttp ? "Potentially Misleading" : "Likely Reliable",
+          confidence,
+          summary: isWeirdDomain
+            ? "The domain is not a widely recognised news outlet. Treat claims with caution and cross-check with trusted sources."
+            : "This looks like a mainstream news domain, but you should still read critically and cross-check major claims.",
+          flags: [
+            isWeirdDomain && "Unfamiliar / low-reputation domain",
+            isHttp && "Connection not secure (http instead of https)",
+          ].filter(Boolean),
+          checks: [
+            { label: "Domain reputation", score: isWeirdDomain ? 0.82 : 0.25 },
+            { label: "HTTPS / security", score: isHttp ? 0.7 : 0.15 },
+            { label: "Metadata consistency", score: 0.4 },
+          ],
+          meta: {
+            model: "misinfo-detector-link-v1",
+            latencyMs: 240,
+          },
+        };
+      }
+
+      if (payload.type === "image") {
+        // For mock, we ignore actual pixels
+        return {
+          ...base,
+          verdict: "Needs Manual Review",
+          confidence: 0.55,
+          summary:
+            "Image-only analysis is uncertain. Use this as a first pass and compare with reverse-image search and fact-checking sites.",
+          flags: [
+            "Cannot verify original source without external lookup",
+            "Memes and edited screenshots often carry misleading context",
+          ],
+          checks: [
+            { label: "Image authenticity signals", score: 0.6 },
+            { label: "Text overlay / meme patterns", score: 0.5 },
+            { label: "Context completeness", score: 0.7 },
+          ],
+          meta: {
+            model: "misinfo-detector-image-v0",
+            latencyMs: 260,
+          },
+        };
+      }
+
+      return {
+        ...base,
+        verdict: "Unknown",
+        confidence: 0.3,
+        summary: "The engine could not classify this input type.",
+        flags: [],
+        checks: [],
+      };
+    }
+
+    function setVerdictPillClass(verdict) {
+      verdictPill.classList.remove("safe", "warn", "danger");
+
+      const v = (verdict || "").toLowerCase();
+      if (v.includes("reliable") || v.includes("not misleading")) {
+        verdictPill.classList.add("safe");
+      } else if (v.includes("likely misleading") || v.includes("false")) {
+        verdictPill.classList.add("danger");
+      } else {
+        verdictPill.classList.add("warn");
+      }
+    }
+
+    function renderResult(result) {
+      placeholder.classList.add("hidden");
+      resultCard.classList.remove("hidden");
+
+      verdictLabel.textContent = result.verdict || "Unknown";
+      setVerdictPillClass(result.verdict);
+
+      const confidence = Math.round((result.confidence || 0) * 100);
+      confidenceFill.style.width = confidence + "%";
+      confidenceScore.textContent = confidence + "%";
+
+      summaryEl.textContent =
+        result.summary ||
+        "No explanation returned from the model. Consider logging this as a debugging case.";
+
+      // flags
+      flagsEl.innerHTML = "";
+      (result.flags || []).forEach((flag) => {
+        const span = document.createElement("span");
+        span.className = "flag";
+        span.textContent = flag;
+        flagsEl.appendChild(span);
+      });
+
+      // checks
+      checksEl.innerHTML = "";
+      (result.checks || []).forEach((check) => {
+        const row = document.createElement("div");
+        row.className = "check-row";
+        const label = document.createElement("span");
+        label.textContent = check.label;
+        const score = document.createElement("span");
+        score.textContent = Math.round((check.score || 0) * 100) + "%";
+        row.appendChild(label);
+        row.appendChild(score);
+        checksEl.appendChild(row);
+      });
+
+      // badges (type + model)
+      badgesEl.innerHTML = "";
+      const typeBadge = document.createElement("span");
+      typeBadge.className = "badge";
+      typeBadge.textContent = `Input: ${result.inputType || "unknown"}`;
+      badgesEl.appendChild(typeBadge);
+
+      if (result.meta?.model) {
+        const modelBadge = document.createElement("span");
+        modelBadge.className = "badge";
+        modelBadge.textContent = `Model: ${result.meta.model}`;
+        badgesEl.appendChild(modelBadge);
+      }
+
+      if (result.meta?.latencyMs != null) {
+        const latBadge = document.createElement("span");
+        latBadge.className = "badge";
+        latBadge.textContent = `Latency: ${result.meta.latencyMs} ms`;
+        badgesEl.appendChild(latBadge);
+      }
+
+      rawJsonEl.textContent = JSON.stringify(result, null, 2);
+    }
+
+    analyzeBtn.addEventListener("click", async () => {
+      try {
+        setLoading(true);
+        const payload = getActivePayload();
+
+        // If image, convert to base64 for the mock.
+        if (payload.type === "image" && payload.file) {
+          const base64 = await fileToBase64(payload.file);
+          payload.imageBase64 = base64;
+          delete payload.file; // don’t send File object
+        }
+
+        // TODO: Replace this with your real API call
+        const result = await mockAnalyze(payload);
+
+        renderResult(result);
+      } catch (err) {
+        alert(err.message || "Something went wrong while analysing.");
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
 </html>
