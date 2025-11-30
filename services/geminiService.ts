@@ -435,7 +435,7 @@ export const chatWithAgent = async (history: {role: string, parts: {text: string
         VERDICT: ${reportContext.verdict}
         SUMMARY: ${reportContext.summary}
         User Question: ${newMessage}
-        Answer concisely.
+        Answer by leveraging the power of gemini to whatever the user asks you, mostly about the event.If user asks something unrelated, try to answer to the best of your capacity."
         `;
 
         const response = await callGeminiWithRetry('gemini-2.5-flash', {
