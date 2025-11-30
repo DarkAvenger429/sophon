@@ -391,9 +391,9 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
 
                         {/* TERMINAL OUTPUT */}
                         <div className={`flex-1 rounded p-4 font-mono text-[10px] overflow-y-auto mb-4 ${highContrast ? 'bg-white border border-black text-black' : 'bg-black border border-gray-800 text-green-500'}`}>
-                            {miningLogs.length === 0 && <span className="opacity-50">> System Ready. Awaiting Input...</span>}
+                            {miningLogs.length === 0 && <span className="opacity-50">&gt; System Ready. Awaiting Input...</span>}
                             {miningLogs.map((log, i) => <div key={i}>{log}</div>)}
-                            {publishStatus === 'MINING' && <div className="animate-pulse">> Processing...</div>}
+                            {publishStatus === 'MINING' && <div className="animate-pulse">&gt; Processing...</div>}
                         </div>
 
                         {/* CONFIRMED BLOCK VISUAL */}
