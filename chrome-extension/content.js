@@ -1,265 +1,173 @@
 
-// SOPHON SENTINEL - ENTERPRISE CONTENT SCRIPT v4.0
-// "GOD MODE" VISUAL LAYER
+// SOPHON SENTINEL - CONTENT SCRIPT
+// Real-time Heuristic Analysis Engine
 
-console.log("🛡️ SOPHON SENTINEL: INJECTING FORENSIC LAYER...");
+console.log("🛡️ Sophon Sentinel: Visual Cortex Active");
 
-// --- CONFIG & STYLES ---
-const STYLES = `
-    .sophon-highlight-danger {
-        background-color: rgba(255, 0, 60, 0.15);
-        border-bottom: 2px solid #ff003c;
-        color: inherit;
-        cursor: help;
-        transition: all 0.2s;
-    }
-    .sophon-highlight-danger:hover {
-        background-color: #ff003c;
-        color: white;
-    }
-    
-    .sophon-hud-card {
-        position: absolute;
-        z-index: 2147483647;
-        background: rgba(5, 5, 5, 0.95);
-        border: 1px solid #00f0ff;
-        border-left: 4px solid #00f0ff;
-        padding: 15px;
-        border-radius: 4px;
-        box-shadow: 0 10px 30px rgba(0, 240, 255, 0.2);
-        backdrop-filter: blur(10px);
-        font-family: 'Courier New', monospace;
-        color: white;
-        width: 250px;
-        pointer-events: none;
-        opacity: 0;
-        transform: translateY(10px);
-        transition: opacity 0.2s, transform 0.2s;
-    }
-    .sophon-hud-visible {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    .sophon-hud-title {
-        font-size: 12px;
-        font-weight: bold;
-        color: #00f0ff;
-        margin-bottom: 8px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-        padding-bottom: 4px;
-    }
-    .sophon-stat-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 4px;
-        font-size: 10px;
-        color: #ccc;
-    }
-    .sophon-bar-bg {
-        width: 100%;
-        height: 4px;
-        background: #333;
-        margin-top: 2px;
-        border-radius: 2px;
-    }
-    .sophon-bar-fill {
-        height: 100%;
-        background: #00ff9f;
-        border-radius: 2px;
-    }
-    
-    #sophon-floating-widget {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        width: 50px;
-        height: 50px;
-        background: #000;
-        border: 2px solid #00ff9f;
-        border-radius: 50%;
-        z-index: 2147483647;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 20px rgba(0, 255, 159, 0.3);
-        transition: transform 0.3s;
-    }
-    #sophon-floating-widget:hover {
-        transform: scale(1.1);
-    }
-    .sophon-logo {
-        font-weight: bold;
-        color: #00ff9f;
-        font-family: monospace;
-        font-size: 24px;
-    }
-    .sophon-pulse {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        border-radius: 50%;
-        border: 1px solid #00ff9f;
-        animation: s-pulse 2s infinite;
-    }
-    @keyframes s-pulse {
-        0% { transform: scale(1); opacity: 1; }
-        100% { transform: scale(1.5); opacity: 0; }
-    }
-`;
+// --- DICTIONARIES ---
 
-// Inject Styles
-const styleSheet = document.createElement("style");
-styleSheet.innerText = STYLES;
-document.head.appendChild(styleSheet);
+// 🔴 PANIC WORDS: Immediate emotional triggers
+const PANIC_REGEX = /\b(doom|collapse|apocalypse|run now|get out|civil war|destroyed|shocking truth|you won['’]t believe|secret cure|mainstream media won['’]t tell you)\b/gi;
 
-// --- 1. SENTIMENT X-RAY (Text Highlighting) ---
-// Words that trigger emotional response or indicate bias
-const TRIGGER_WORDS = [
-    "shocking", "exposed", "secret", "deep state", "hoax", "miracle", "destroy", 
-    "slammed", "urgent", "banned", "censored", "mainstream media", "truth", 
-    "plotting", "nightmare", "invasion", "collapse", "panic"
-];
+// 🟡 RUMOR MARKERS: Hearsay and unverified attribution
+const RUMOR_REGEX = /\b(sources say|people are saying|rumor is|unverified|leaked|allegedly|reportedly|it is believed|anonymous source)\b/gi;
 
-function runXRayScan() {
-    // Only scan paragraphs to avoid breaking navigation
-    const elements = document.querySelectorAll('p, li, span');
-    
-    elements.forEach(el => {
-        if (el.getAttribute('data-sophon-scanned')) return;
-        if (el.children.length > 0) return; // Skip complex nodes
-        
-        let html = el.innerHTML;
-        let hasChange = false;
-        
-        TRIGGER_WORDS.forEach(word => {
-            const regex = new RegExp(`\\b${word}\\b`, 'gi');
-            if (regex.test(html)) {
-                html = html.replace(regex, (match) => `<span class="sophon-highlight-danger" title="Emotional Trigger detected">${match}</span>`);
-                hasChange = true;
-            }
-        });
-        
-        if (hasChange) {
-            el.innerHTML = html;
-            el.setAttribute('data-sophon-scanned', 'true');
-        }
-    });
-}
+// 🟢 TRUST MARKERS: Credible attribution
+const TRUST_REGEX = /\b(according to (official|documents)|peer-reviewed|correction:|associated press|reuters|official statement)\b/gi;
 
-// --- 2. INTEL HUD (Hover Cards) ---
-let activeHud = null;
+let isScanning = true;
 
-function createHud(x, y, data) {
-    if (activeHud) activeHud.remove();
-    
-    const hud = document.createElement('div');
-    hud.className = 'sophon-hud-card';
-    hud.style.left = `${x + 20}px`;
-    hud.style.top = `${y + 20}px`;
-    
-    const trustColor = data.trust > 80 ? '#00ff9f' : data.trust > 50 ? '#fcee0a' : '#ff003c';
-    
-    hud.innerHTML = `
-        <div class="sophon-hud-title">SOPHON INTEL</div>
-        <div class="sophon-stat-row">
-            <span>TRUST SCORE</span>
-            <span style="color:${trustColor}">${data.trust}/100</span>
-        </div>
-        <div class="sophon-bar-bg"><div class="sophon-bar-fill" style="width:${data.trust}%; background:${trustColor}"></div></div>
-        
-        <div class="sophon-stat-row" style="margin-top:10px;">
-            <span>SENTIMENT</span>
-            <span>${data.sentiment}</span>
-        </div>
-        
-        <div class="sophon-stat-row">
-            <span>BIAS</span>
-            <span>${data.bias}</span>
+// --- TICKER UI INJECTION ---
+function createLiveTicker() {
+    if (document.getElementById('sophon-live-ticker')) return;
+
+    const ticker = document.createElement('div');
+    ticker.id = 'sophon-live-ticker';
+    ticker.innerHTML = `
+        <div class="sophon-ticker-content">
+            <span class="sophon-icon">🛡️</span>
+            <span class="sophon-text">SOPHON SENTINEL ACTIVE // SCANNING DOM // MONITORING TRUST SIGNALS...</span>
         </div>
     `;
-    
-    document.body.appendChild(hud);
-    
-    // Animate in
-    requestAnimationFrame(() => hud.classList.add('sophon-hud-visible'));
-    
-    return hud;
+    document.body.appendChild(ticker);
 }
 
-function attachHudListeners() {
-    const headlines = document.querySelectorAll('h1, h2, h3, a');
-    headlines.forEach(el => {
-        if (el.getAttribute('data-sophon-hud')) return;
-        
-        el.addEventListener('mouseenter', (e) => {
-            if (el.innerText.length < 15) return;
-            
-            // Mock Data Generation based on heuristics
-            const text = el.innerText.toLowerCase();
-            const isClickbait = /shocking|you won't believe|secret/.test(text);
-            
-            const data = {
-                trust: isClickbait ? Math.floor(Math.random() * 40) : 85 + Math.floor(Math.random() * 15),
-                sentiment: isClickbait ? 'HIGH AROUSAL (FEAR)' : 'NEUTRAL',
-                bias: 'ANALYZING...'
-            };
-            
-            activeHud = createHud(e.pageX, e.pageY, data);
-        });
-        
-        el.addEventListener('mouseleave', () => {
-            if (activeHud) {
-                activeHud.remove();
-                activeHud = null;
-            }
-        });
-        
-        el.setAttribute('data-sophon-hud', 'true');
-    });
+function removeLiveTicker() {
+    const ticker = document.getElementById('sophon-live-ticker');
+    if (ticker) ticker.remove();
 }
 
-// --- 3. THE SENTINEL WIDGET (Floating Control) ---
-function injectWidget() {
-    if (document.getElementById('sophon-floating-widget')) return;
+// --- SCANNING LOGIC ---
+
+function processNode(node) {
+    if (!isScanning) return;
     
-    const widget = document.createElement('div');
-    widget.id = 'sophon-floating-widget';
-    widget.innerHTML = `
-        <div class="sophon-pulse"></div>
-        <div class="sophon-logo">S</div>
-    `;
-    
-    widget.addEventListener('click', () => {
-        const confirmScan = confirm("SOPHON SENTINEL\n\nPage Status: MONITORING\n\nDo you want to run a Deep Scan on this page content?");
-        if (confirmScan) {
-            // In a real app, this sends a message to background.js
-            alert("SCAN INITIATED... \n\nSending page content to Gemini 2.5 Flash...");
+    // Skip script, style, input, and already processed nodes
+    if (['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT', 'NOSCRIPT', 'CODE', 'PRE'].includes(node.parentNode.tagName)) return;
+    if (node.parentNode.classList.contains('sophon-processed')) return;
+
+    let text = node.nodeValue;
+    if (!text || text.length < 5) return; // Skip tiny fragments
+
+    // 1. PANIC SCAN (Highest Priority)
+    let match = PANIC_REGEX.exec(text);
+    if (match) {
+        injectMarker(node, match[0], 'panic');
+        return;
+    }
+
+    // 2. RUMOR SCAN
+    PANIC_REGEX.lastIndex = 0; // Reset
+    match = RUMOR_REGEX.exec(text);
+    if (match) {
+        injectMarker(node, match[0], 'rumor');
+        return;
+    }
+
+    // 3. TRUST SCAN
+    RUMOR_REGEX.lastIndex = 0; // Reset
+    match = TRUST_REGEX.exec(text);
+    if (match) {
+        injectMarker(node, match[0], 'trust');
+        return;
+    }
+}
+
+function injectMarker(textNode, matchText, type) {
+    try {
+        const span = document.createElement('span');
+        span.className = `sophon-processed sophon-highlight-${type}`;
+        span.textContent = matchText;
+
+        // Visual Indicator (Dot/Icon)
+        const indicator = document.createElement('span');
+        indicator.className = `sophon-dot sophon-dot-${type}`;
+        
+        // Tooltip
+        const tooltip = document.createElement('span');
+        tooltip.className = `sophon-tooltip sophon-tooltip-${type}`;
+        
+        if (type === 'panic') {
+            indicator.textContent = '!';
+            tooltip.innerHTML = `<strong>⚠️ EMOTIONAL TRIGGER</strong><br/>Detailed analysis suggests this phrasing is designed to bypass critical thinking.`;
+        } else if (type === 'rumor') {
+            indicator.textContent = '?';
+            tooltip.innerHTML = `<strong>⚠️ UNVERIFIED ATTRIBUTION</strong><br/>Hearsay detected. Cross-reference with primary sources.`;
+        } else if (type === 'trust') {
+            indicator.textContent = '✓';
+            tooltip.innerHTML = `<strong>✅ CREDIBILITY SIGNAL</strong><br/>Citation or specific attribution detected.`;
         }
-    });
+
+        // Insert into DOM
+        const parent = textNode.parentNode;
+        const index = textNode.nodeValue.indexOf(matchText);
+        
+        if (index >= 0) {
+            const before = document.createTextNode(textNode.nodeValue.substring(0, index));
+            const after = document.createTextNode(textNode.nodeValue.substring(index + matchText.length));
+            
+            // Re-assemble
+            parent.insertBefore(before, textNode);
+            parent.insertBefore(span, textNode); // The highlighted text
+            parent.insertBefore(indicator, textNode); // The icon next to it
+            indicator.appendChild(tooltip); // Tooltip lives inside the indicator
+            parent.insertBefore(after, textNode);
+            parent.removeChild(textNode);
+        }
+    } catch(e) {
+        // Fail silently to preserve page integrity
+    }
+}
+
+function scanPage() {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    let node;
+    const nodesToProcess = [];
     
-    document.body.appendChild(widget);
+    while (node = walker.nextNode()) {
+        nodesToProcess.push(node);
+    }
+
+    nodesToProcess.forEach(processNode);
 }
 
-// --- EXECUTION LOOP ---
-function init() {
-    runXRayScan();
-    attachHudListeners();
-    injectWidget();
-}
+// --- MESSAGE LISTENER (Context Menu) ---
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "toggle") {
+        isScanning = request.status;
+        if (isScanning) {
+            createLiveTicker();
+            scanPage();
+        } else {
+            removeLiveTicker();
+            location.reload();
+        }
+    }
 
-// Run initially
-init();
+    if (request.action === "verifySelection") {
+        alert(`🛡️ SOPHON ANALYSIS:\n\n"${request.text}"\n\nSTATUS: VERIFYING...\n(In full version, this triggers RAG Check)`);
+    }
 
-// Watch for scrolling/dynamic content
-let timeout;
-window.addEventListener('scroll', () => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => {
-        runXRayScan();
-        attachHudListeners();
-    }, 500);
+    if (request.action === "verifyImage") {
+        alert(`📸 SOPHON IMAGE SCAN:\n\nURL: ${request.url.substring(0, 30)}...\n\nSTATUS: SCANNING METADATA...\n(In full version, this triggers Deepfake Detection)`);
+    }
 });
 
-console.log("🛡️ SOPHON VISUAL LAYER ACTIVE");
+// --- OBSERVER FOR DYNAMIC CONTENT (Infinite Scroll) ---
+let timeout = null;
+const observer = new MutationObserver((mutations) => {
+    if (!isScanning) return;
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => {
+        scanPage();
+    }, 1000); // Debounce scanning
+});
+
+// --- INITIALIZATION ---
+chrome.storage.local.get(['sophonActive'], (result) => {
+    if (result.sophonActive !== false) { // Default to true
+        createLiveTicker();
+        scanPage();
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+});

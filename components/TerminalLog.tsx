@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { LogEntry } from '../types';
 
 interface TerminalLogProps {
@@ -8,14 +8,32 @@ interface TerminalLogProps {
 }
 
 export const TerminalLog: React.FC<TerminalLogProps> = ({ logs, highContrast }) => {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+
+  // Check scroll position to determine if we should stick to bottom
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    
+    // Increased tolerance to 50px to make it less finicky
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    setShouldAutoScroll(isAtBottom);
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    if (shouldAutoScroll && containerRef.current) {
+        // Use scrollTop instead of scrollIntoView for better stability in terminals
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [logs, shouldAutoScroll]);
 
   return (
-    <div className={`rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs flex flex-col gap-1 border-l-2 shadow-inner ${highContrast ? 'bg-black border-white' : 'glass-panel border-sophon-accent/50 bg-black/60'}`}>
+    <div 
+        ref={containerRef}
+        onScroll={handleScroll}
+        className={`rounded-lg p-4 h-64 overflow-y-auto font-mono text-xs flex flex-col gap-1 border-l-2 shadow-inner ${highContrast ? 'bg-black border-white' : 'glass-panel border-sophon-accent/50 bg-black/60'}`}
+    >
       <div className={`sticky top-0 backdrop-blur pb-2 mb-2 border-b flex justify-between items-center z-10 ${highContrast ? 'bg-black border-white text-white' : 'bg-black/80 border-white/10 text-sophon-accent'}`}>
         <span className="font-bold tracking-widest">&gt;&gt; SYSTEM_LOG</span>
         {!highContrast && (
@@ -44,7 +62,6 @@ export const TerminalLog: React.FC<TerminalLogProps> = ({ logs, highContrast }) 
           </span>
         </div>
       ))}
-      <div ref={bottomRef} />
     </div>
   );
 };

@@ -1,26 +1,30 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AgentStatus, LogEntry, Report, VerdictType, SourceCategory } from './types';
-import { scanForTopics, investigateTopic, analyzeManualQuery, analyzeImageClaim, analyzeAudioClaim, DATA_SECTORS } from './services/geminiService';
+import { AgentStatus, LogEntry, Report, VerdictType, NewsItem } from './types';
+import { scanForTopics, investigateTopic, analyzeManualQuery, analyzeImageClaim, analyzeAudioClaim, fetchGlobalNews } from './services/geminiService';
 import { TerminalLog } from './components/TerminalLog';
 import { ReportCard } from './components/ReportCard';
 import { RadarPulse } from './components/RadarPulse';
 import { ThreatDashboard } from './components/ThreatDashboard';
-import { Heatmap } from './components/Heatmap';
+import { HolographicGlobe } from './components/HolographicGlobe';
 import { LiveTicker } from './components/LiveTicker';
 import { ArchivePanel } from './components/ArchivePanel';
 import { ImageUploader } from './components/ImageUploader';
 import { VoiceInput } from './components/VoiceInput';
 import { WhatsAppConnect } from './components/WhatsAppConnect';
 import { IntelChat } from './components/IntelChat';
+import { PublisherPortal } from './components/PublisherPortal';
+import { GlobalNewsFeed } from './components/GlobalNewsFeed';
 import { GameMode } from './components/GameMode';
 import { DeconstructionLab } from './components/DeconstructionLab';
-import { PublisherPortal } from './components/PublisherPortal';
+import { AgentID } from './components/AgentID';
 
 export default function App() {
   // --- STATE ---
   const [status, setStatus] = useState<AgentStatus>(AgentStatus.IDLE);
   const [reports, setReports] = useState<Report[]>([]);
+  const [globalNews, setGlobalNews] = useState<NewsItem[]>([]);
+  const [isNewsLoading, setIsNewsLoading] = useState(false);
   
   const [archive, setArchive] = useState<Report[]>(() => {
     try {
@@ -33,8 +37,12 @@ export default function App() {
   
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isAutoScanning, setIsAutoScanning] = useState(false);
+  const [scanInterval, setScanInterval] = useState(180000); // 3 minutes strictly enforced
+  const [autoDeepScan, setAutoDeepScan] = useState(false);
+  
   const [manualInput, setManualInput] = useState('');
-  const [activeSector, setActiveSector] = useState<string>('ALL_SECTORS');
+  const [activeSector, setActiveSector] = useState<string>('GLOBAL_WIRE');
+  const [scannedCandidates, setScannedCandidates] = useState<{ query: string, sector: string }[]>([]);
   const [activeTab, setActiveTab] = useState<'feed' | 'threats' | 'archive' | 'publisher'>('feed');
   const [deepScanMode, setDeepScanMode] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -56,6 +64,11 @@ export default function App() {
     localStorage.setItem('sophon_archive', JSON.stringify(archive));
   }, [archive]);
 
+  // Initial News Load
+  useEffect(() => {
+    refreshGlobalNews();
+  }, []);
+
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [...prev, {
       id: crypto.randomUUID(),
@@ -63,6 +76,31 @@ export default function App() {
       message,
       type
     }]);
+  };
+
+  const refreshGlobalNews = async () => {
+      setIsNewsLoading(true);
+      try {
+          const liveData = await fetchGlobalNews();
+          if (liveData && liveData.length > 0) {
+              const formatted: NewsItem[] = liveData.map((item, idx) => ({
+                  id: `gn-${idx}-${Date.now()}`,
+                  headline: item.headline,
+                  summary: item.summary,
+                  source: item.source || "Global Wire",
+                  time: item.time || "Recent",
+                  url: item.url || "#",
+                  upvotes: Math.floor(Math.random() * 50) + 5
+              }));
+              setGlobalNews(formatted);
+              addLog("Global News Wire Synced.", 'success');
+          } else {
+              addLog("Global News Wire sync empty or failed.", 'warning');
+          }
+      } catch (e) {
+          console.error("Feed Error", e);
+      }
+      setIsNewsLoading(false);
   };
 
   const handleNewReport = (report: Report) => {
@@ -91,34 +129,48 @@ export default function App() {
 
     try {
       setStatus(AgentStatus.SCANNING);
-      const currentSector = DATA_SECTORS[Math.floor(Math.random() * DATA_SECTORS.length)];
-      setActiveSector(currentSector);
-      addLog(`RAG Pipeline Initialized. Target Sector: ${currentSector}`, 'action');
+      addLog(`Initiating Federated Scan: News, Reddit & 4chan...`, 'action');
       
-      const results = await scanForTopics(currentSector);
+      // Step 1: Fetch diverse targets (News + Rumors)
+      const results = await scanForTopics();
+      setScannedCandidates(results); 
+
       if (results.length === 0) {
-          addLog(`Sector ${currentSector} nominal. No anomalies.`, 'info');
+          addLog(`Scan returned no viable targets.`, 'info');
           setStatus(AgentStatus.IDLE);
           return;
       }
 
-      const target = results[0]; 
-      setStatus(AgentStatus.VERIFYING);
-      addLog(`Retrieving context for: "${target.query}"`, 'action');
-      
-      const report = await investigateTopic(target.query, target.sector, false);
-      if (report) {
-         handleNewReport(report);
-         const msgType = report.verdict === VerdictType.VERIFIED ? 'success' :
-                         report.verdict === VerdictType.FALSE ? 'error' : 'warning';
-         if (report.verdict === VerdictType.FALSE || report.verdict === VerdictType.MISLEADING) {
-             addLog(`CRITICAL THREAT DETECTED: ${report.topic}`, 'error');
-         } else {
-             addLog(`Analysis Complete. Verdict: ${report.verdict} [Conf: ${report.confidenceScore}%]`, msgType);
-         }
-      } else {
-         addLog(`RAG Retrieval failed for target.`, 'warning');
+      addLog(`Targets Acquired: ${results.length} nodes (News, Reddit, Anon). Processing batch...`, 'info');
+
+      // Step 2: Process Batch Loop
+      for (const target of results) {
+          // Break if user stopped scan
+          if (!scanIntervalRef.current) break;
+
+          setActiveSector(target.sector); // Update UI to show we are scanning Reddit/4chan etc
+          setStatus(AgentStatus.VERIFYING);
+          
+          addLog(`Scanning Sector [${target.sector}]: "${target.query}"`, 'action');
+          
+          const report = await investigateTopic(target.query, target.sector, autoDeepScan);
+          
+          if (report) {
+             handleNewReport(report);
+             const msgType = report.verdict === VerdictType.VERIFIED ? 'success' :
+                             report.verdict === VerdictType.FALSE ? 'error' : 'warning';
+             
+             if (report.verdict === VerdictType.FALSE || report.verdict === VerdictType.MISLEADING) {
+                 addLog(`⚠️ THREAT DETECTED: ${report.topic}`, 'error');
+             } else {
+                 addLog(`Verdict: ${report.verdict} [Conf: ${report.confidenceScore}%]`, msgType);
+             }
+          }
+
+          // Small delay between batch items to prevent API slamming and simulate processing time
+          await new Promise(r => setTimeout(r, 2500));
       }
+
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       if (errorMsg.includes("429") || errorMsg.includes("quota")) {
@@ -130,28 +182,48 @@ export default function App() {
     } finally {
       setStatus(AgentStatus.IDLE);
       setActiveSector('STANDBY');
-      addLog('Scanning paused. Cooling down (120s)...', 'info');
+      addLog(`Batch Scan Complete. Monitoring loop active (${scanInterval/1000}s).`, 'info');
     }
-  }, [status]);
+  }, [status, autoDeepScan, scanInterval]);
 
+  // LOGGING EFFECT: Only fires when toggling Scanning ON/OFF
   useEffect(() => {
     if (isAutoScanning) {
-      addLog('Sentinel Loop Engaged. Interval: 120s', 'success');
-      performScanCycle();
+        addLog(`Sentinel Loop Engaged. Interval: ${scanInterval/1000}s`, 'success');
+        if (status === AgentStatus.IDLE) {
+            performScanCycle();
+        }
+    } else {
+        if (scanIntervalRef.current) {
+             // Only log termination if we were previously scanning
+             addLog('Sentinel Loop Terminated.', 'warning');
+        }
+    }
+  }, [isAutoScanning]);
+
+  // INTERVAL EFFECT: Manages the loop separately from the logs to prevent spam
+  useEffect(() => {
+    if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+        scanIntervalRef.current = null;
+    }
+
+    if (isAutoScanning) {
       scanIntervalRef.current = setInterval(() => {
         performScanCycle();
-      }, 120000); 
+      }, scanInterval); 
     } else {
-      if (scanIntervalRef.current) {
-         addLog('Sentinel Loop Terminated.', 'warning');
-         clearInterval(scanIntervalRef.current);
-         scanIntervalRef.current = null;
-      }
+      setActiveSector('STANDBY');
+      setScannedCandidates([]);
     }
+    
     return () => {
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      if (scanIntervalRef.current) {
+          clearInterval(scanIntervalRef.current);
+          scanIntervalRef.current = null;
+      }
     };
-  }, [isAutoScanning, performScanCycle]);
+  }, [isAutoScanning, scanInterval, performScanCycle]);
 
   const handleManualVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,7 +299,7 @@ export default function App() {
   return (
     <div className={`min-h-screen ${highContrast ? 'bg-black text-white' : 'bg-sophon-dark text-gray-200'} selection:bg-sophon-accent/30 selection:text-white overflow-x-hidden`}>
       
-      <LiveTicker activeSector={activeSector} threatLevel={threatCount > 5 ? 'HIGH' : 'LOW'} reports={archive} highContrast={highContrast} />
+      <LiveTicker activeSector={activeSector} threatLevel={threatCount > 5 ? 'HIGH' : 'LOW'} news={globalNews} highContrast={highContrast} />
 
       <WhatsAppConnect isOpen={showConnectModal} onClose={() => setShowConnectModal(false)} highContrast={highContrast} />
       {chatReport && (
@@ -237,25 +309,17 @@ export default function App() {
       <nav className={`sticky top-0 w-full z-50 border-b ${highContrast ? 'bg-black border-white' : 'border-white/5 bg-sophon-dark/90 backdrop-blur-md'}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 group cursor-pointer">
-            <div className={`w-8 h-8 rounded transition-all duration-500 group-hover:rotate-180 ${highContrast ? 'bg-white text-black' : 'bg-gradient-to-br from-sophon-accent to-blue-600 text-black'} flex items-center justify-center font-bold font-mono`}>S</div>
+            <img src="/logo.png" className={`w-8 h-8 rounded-full object-cover transition-all duration-500 group-hover:scale-110 ${highContrast ? 'border-2 border-white' : 'border border-sophon-accent'}`} alt="Sophon Logo" />
             <h1 className="text-xl font-bold tracking-tight group-hover:text-sophon-accent transition-colors">SOPHON <span className={`font-light ml-2 text-sm hidden sm:inline-block ${highContrast ? 'text-gray-300' : 'text-gray-600'}`}>SENTINEL SYSTEM v2.5</span></h1>
           </div>
 
           <div className="flex items-center gap-6">
-            <button
-                onClick={() => setShowConnectModal(true)}
-                className={`hidden md:flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded transition-all transform hover:scale-105 ${highContrast ? 'bg-white text-black' : 'bg-green-500/10 text-green-400 hover:bg-green-500/20 border border-green-500/30 hover:shadow-[0_0_10px_rgba(74,222,128,0.3)]'}`}
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
-                </svg>
-                CONNECT AGENT
-            </button>
-
             <div className="hidden md:flex items-center gap-4 font-mono text-xs">
                <div className="flex flex-col items-end">
                    <span className="text-gray-500 text-[10px]">CURRENT VECTOR</span>
-                   <span className={highContrast ? 'text-white font-bold' : 'text-sophon-accent'}>{activeSector}</span>
+                   <span className={`font-bold transition-all ${highContrast ? 'text-black' : activeSector === 'ANON_RUMORS' ? 'text-sophon-danger animate-pulse' : activeSector === 'REDDIT_HIVE' ? 'text-orange-500' : 'text-sophon-accent'}`}>
+                       {activeSector}
+                   </span>
                </div>
                <div className="h-8 w-px bg-white/10"></div>
                <div className="flex flex-col items-end">
@@ -274,22 +338,47 @@ export default function App() {
                 </svg>
             </button>
             
-            <button
-              onClick={() => setIsAutoScanning(!isAutoScanning)}
-              className={`px-4 py-2 rounded font-mono text-xs font-bold transition-all border ${
-                isAutoScanning 
-                  ? 'bg-sophon-danger/10 border-sophon-danger text-sophon-danger hover:bg-sophon-danger/20 animate-pulse' 
-                  : highContrast ? 'bg-white text-black border-white' : 'bg-sophon-accent/10 border-sophon-accent text-sophon-accent hover:bg-sophon-accent/20 hover:shadow-[0_0_15px_rgba(0,240,255,0.4)]'
-              }`}
-            >
-              {isAutoScanning ? 'TERMINATE SCAN' : 'INITIATE SCAN'}
-            </button>
+            <div className="flex items-center gap-2">
+                <select 
+                    value={scanInterval} 
+                    onChange={(e) => setScanInterval(Number(e.target.value))}
+                    disabled={isAutoScanning}
+                    className={`text-[10px] p-1 rounded bg-black/40 border ${highContrast ? 'border-white text-white' : 'border-gray-700 text-gray-300'}`}
+                >
+                    <option value={60000}>1m</option>
+                    <option value={120000}>2m</option>
+                    <option value={180000}>3m</option>
+                    <option value={300000}>5m</option>
+                </select>
+                <button
+                    onClick={() => setAutoDeepScan(!autoDeepScan)}
+                    disabled={isAutoScanning}
+                    className={`text-[10px] px-2 py-1 rounded border ${autoDeepScan ? 'bg-purple-500/20 text-purple-400 border-purple-500' : 'bg-black/40 text-gray-500 border-gray-700'}`}
+                    title="Deep Scan Mode"
+                >
+                    DEEP
+                </button>
+                <button
+                onClick={() => setIsAutoScanning(!isAutoScanning)}
+                className={`px-4 py-2 rounded font-mono text-xs font-bold transition-all border ${
+                    isAutoScanning 
+                    ? 'bg-sophon-danger/10 border-sophon-danger text-sophon-danger hover:bg-sophon-danger/20 animate-pulse' 
+                    : highContrast ? 'bg-white text-black border-white' : 'bg-sophon-accent/10 border-sophon-accent text-sophon-accent hover:bg-sophon-accent/20 hover:shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                }`}
+                >
+                {isAutoScanning ? 'TERMINATE' : 'AUTO SCAN'}
+                </button>
+            </div>
           </div>
         </div>
       </nav>
 
       <main className="pt-8 pb-12 max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
+           
+           {/* AGENT PROFILE CARD */}
+           <AgentID reportCount={archive.length} highContrast={highContrast} />
+
            <div className={`glass-panel p-6 rounded-lg flex flex-col items-center justify-center relative overflow-hidden ${highContrast ? 'border-2 border-white' : ''}`}>
              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
              {!highContrast && <RadarPulse active={status !== AgentStatus.IDLE} />}
@@ -309,6 +398,51 @@ export default function App() {
                 </div>
              </div>
            </div>
+
+           {/* ACTIVE SECTOR SCAN VISUALIZATION */}
+           <div className={`p-4 rounded-lg border animate-fadeIn ${highContrast ? 'bg-white border-black text-black' : 'glass-panel border-sophon-accent/40 bg-sophon-accent/5'}`}>
+               <div className="flex justify-between items-center mb-2">
+                  <span className="text-[10px] font-mono uppercase font-bold tracking-widest opacity-70">Target Acquisition</span>
+                  {(status === AgentStatus.SCANNING || status === AgentStatus.VERIFYING) && (
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-sophon-accent animate-ping"></div>
+                    </div>
+                  )}
+               </div>
+               
+               <div className="flex flex-col gap-2 mb-3">
+                   <div className={`text-[10px] px-3 py-2 rounded border text-center transition-colors duration-500 ${
+                       highContrast ? 'bg-black text-white' : 
+                       activeSector === 'ANON_RUMORS' ? 'bg-sophon-danger/10 text-sophon-danger border-sophon-danger/30' :
+                       activeSector === 'REDDIT_HIVE' ? 'bg-orange-500/10 text-orange-500 border-orange-500/30' :
+                       'bg-sophon-accent/10 text-sophon-accent border-sophon-accent/30'
+                   }`}>
+                       SCANNING: {activeSector}
+                   </div>
+               </div>
+               
+               {scannedCandidates.length > 0 && (
+                   <div className="mt-3 pt-2 border-t border-white/10 animate-fadeIn">
+                       <p className="text-[9px] text-gray-500 font-mono mb-1 uppercase tracking-widest">Processing Batch:</p>
+                       <div className="flex flex-col gap-1">
+                           {scannedCandidates.map((c, i) => (
+                               <div key={i} className={`flex justify-between items-center text-[9px] px-2 py-1 rounded border truncate ${highContrast ? 'bg-black text-white border-black' : 'bg-white/5 border-white/10'}`} style={{ opacity: status === AgentStatus.VERIFYING && activeSector === c.sector ? 1 : 0.5 }}>
+                                   <span className="truncate flex-1">{c.query}</span>
+                                   <span className={`ml-2 text-[8px] font-bold ${c.sector === 'ANON_RUMORS' ? 'text-sophon-danger' : c.sector === 'REDDIT_HIVE' ? 'text-orange-400' : 'text-sophon-accent'}`}>[{c.sector.split('_')[0]}]</span>
+                               </div>
+                           ))}
+                       </div>
+                   </div>
+               )}
+
+               {isAutoScanning && status === AgentStatus.IDLE && (
+                   <div className="mt-2 text-[9px] text-gray-500 font-mono text-center">
+                       NEXT BATCH IN {(scanInterval / 60000).toFixed(1)}m...
+                   </div>
+               )}
+           </div>
+           
+           <GlobalNewsFeed news={globalNews} onRefresh={refreshGlobalNews} loading={isNewsLoading} highContrast={highContrast} />
            <ImageUploader onMediaSelected={handleMediaUpload} disabled={status !== AgentStatus.IDLE} highContrast={highContrast} />
            <TerminalLog logs={logs} highContrast={highContrast} />
         </div>
@@ -342,19 +476,6 @@ export default function App() {
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                     </svg>
-                    </button>
-                 </div>
-                 <div className="flex items-center gap-2 self-end">
-                    <button
-                        type="button"
-                        onClick={() => setDeepScanMode(!deepScanMode)}
-                        className={`text-[10px] font-mono font-bold px-3 py-1 rounded border transition-colors flex items-center gap-2 ${
-                            deepScanMode 
-                              ? highContrast ? 'bg-white text-black border-black' : 'bg-sophon-warning/20 border-sophon-warning text-sophon-warning shadow-[0_0_10px_rgba(252,238,10,0.3)]' 
-                              : highContrast ? 'bg-black text-white border-white' : 'bg-black/40 border-gray-800 text-gray-500 hover:text-white'
-                        }`}
-                    >
-                        {deepScanMode ? '◉ DEEP SCAN: ON (SLOW)' : '○ DEEP SCAN: OFF (FAST)'}
                     </button>
                  </div>
              </form>
@@ -404,15 +525,21 @@ export default function App() {
                 <div className="space-y-4 animate-fadeIn">
                     {!highContrast && (
                         <div className="mb-6">
-                            <Heatmap reports={archive} highContrast={highContrast} />
+                            {/* REPLACED HEATMAP WITH HOLOGRAPHIC GLOBE */}
+                            <HolographicGlobe reports={archive} highContrast={highContrast} />
                         </div>
                     )}
+                    
+                    {/* GAME MODE TRAINING */}
                     <div className="mb-6">
                         <GameMode highContrast={highContrast} />
                     </div>
+
+                    {/* EDUCATIONAL HUB */}
                     <div className="mb-6">
                         <DeconstructionLab highContrast={highContrast} />
                     </div>
+
                     {reports.length === 0 ? (
                     <div className={`text-center py-10 border-2 border-dashed rounded-lg ${highContrast ? 'border-white' : 'border-gray-800'}`}>
                         <p className="text-gray-500 font-mono">NO ACTIVE SESSION DATA</p>

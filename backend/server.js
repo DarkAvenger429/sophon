@@ -1,3 +1,4 @@
+
 import express from 'express';
 import bodyParser from 'body-parser';
 import { GoogleGenAI } from "@google/genai";
@@ -65,7 +66,7 @@ I verify:
 *Forward any suspicious message to me.*
 `;
 
-// --- SYSTEM PROMPT ---
+// --- SYSTEM PROMPT (BULLETPROOF VERSION) ---
 const SYSTEM_INSTRUCTION = `
 You are Sophon, a Multimodal Intelligence Sentinel.
 
@@ -76,34 +77,30 @@ PROTOCOL:
 
 2. **TEMPORAL ANALYSIS (TIME CHECK):**
    - CHECK DATES CAREFULLY.
-   - If event happened > 3 years ago -> VERDICT: [🕒 OUTDATED].
-   - If event happened > 10 days ago but < 3 years -> VERDICT: [🗓️ NOT RECENT].
-   - If event is current (< 10 days) -> Use standard verdicts.
+   - If event happened > 3 years ago -> VERDICT: [🕒 VERY OLD NEWS].
+   - If event happened 1 month to 3 years ago -> VERDICT: [🗓️ OLD NEWS].
+   - If event happened 1 day to 1 month ago -> VERDICT: [RECENT].
+   - If event is current (< 24 hours) -> VERDICT: [🔴 BREAKING].
 
-3. **PSY-OP ANALYSIS:**
-   - Analyze the *intent* of the message. Is it trying to cause Fear, Rage, or Confusion?
-   - Estimate "Viral Risk" (High/Med/Low).
+3. **SOURCE WEIGHTING (CRITICAL):**
+   - If a claim comes from a VERIFIED official account (e.g. Blue Tick Instagram/Twitter of a Govt/Celeb), treat it as HIGHLY CREDIBLE unless debunked by Reuters/AP/AFP.
+   - Do NOT mark official statements as "Misleading" unless you have proof.
 
-4. **PROCESS:** 
-   - Internal Translate -> Verify (Search) -> Check Dates -> Analyze Intent -> Output.
+4. **FORMAT (STRICT & CONCISE - MAX 1000 CHARS):**
+   - Use this EXACT structure. No fluff.
 
-5. **FORMAT (Strictly Concise - MAX 1000 CHARS):**
-   - Use these Emojis.
-   - Keep it short. No long paragraphs.
+   *[VERDICT_EMOJI] STATUS: [VERIFIED / FALSE / MISLEADING / VERY OLD NEWS / OLD NEWS / RECENT / BREAKING]*
+   *DATE:* [YYYY-MM-DD] (Of the actual event)
+   *RISK:* [🔴 HIGH / 🟡 MED / 🟢 LOW]
+   *CONFIDENCE:* [0-100]%
 
-   [STATUS: VERIFIED / FALSE / MISLEADING / OUTDATED]
-   *DATE:* [YYYY-MM-DD]
-   *VIRAL RISK:* [🔴 HIGH / 🟡 MED / 🟢 LOW]
+   *INTEL:*
+   (2-3 sentences max. Just the facts. Explain WHY it is True/False.)
 
-   *INTENT:*
-   (Short sentence on manipulation tactics)
+   *TL;DR:* (1 sentence summary)
 
-   *FACTS:*
-   (Summary in USER LANGUAGE)
-
-   *PROOF:*
-   • (Point 1)
-   • (Point 2)
+   *SOURCES:*
+   (List 2 Tier-1 Sources Only e.g. BBC, Reuters, Gov)
 `;
 
 // HELPER: Sleep/Retry
@@ -154,8 +151,8 @@ async function extractContext(base64Data, mimeType) {
         const isPdf = mimeType.toLowerCase().includes('pdf');
         const geminiMimeType = isPdf ? 'application/pdf' : mimeType;
         const prompt = isPdf 
-            ? "Analyze this document. Extract the official subject, dates, and key claims." 
-            : "Extract text/claim from this image.";
+            ? "Analyze this document. Extract the official subject, dates, and key claims. Is it official letterhead?" 
+            : "Analyze this image. Extract all text. Describe the visual context. Is it a tweet/post? Who is the author? Is there a verified checkmark?";
 
         const response = await callGemini('gemini-2.5-flash', {
             contents: {
@@ -172,6 +169,7 @@ async function extractContext(base64Data, mimeType) {
 // STAGE 2: RAG
 async function verifyClaim(claimText, contextHistory = "") {
     try {
+        // Enforce Grounding for Truth
         const prompt = contextHistory 
             ? `HISTORY: ${contextHistory}\n\nCURRENT USER INPUT: "${claimText}"\n\nINSTRUCTION: Verify CURRENT INPUT. Match Language.` 
             : `CURRENT USER INPUT: "${claimText}"`;
@@ -186,9 +184,10 @@ async function verifyClaim(claimText, contextHistory = "") {
 
         // --- TRUNCATION SAFETY ---
         let finalText = response.text || "";
+        
         // Twilio limit is 1600. We cut at 1500 to be safe.
         if (finalText.length > 1500) {
-            finalText = finalText.substring(0, 1490) + "... [Truncated for WhatsApp]";
+            finalText = finalText.substring(0, 1490) + "... [Truncated]";
         }
         return finalText;
     } catch (error) {
@@ -211,7 +210,7 @@ async function processAndReply(body, mediaUrl, mediaType, sender, recipient) {
         // 2. AUDIO
         else if (mediaUrl && (mediaType.startsWith('audio/') || mediaType.includes('ogg'))) {
             const media = await downloadMedia(mediaUrl);
-            if (!media) replyText = "⚠️ Error downloading audio.";
+            if (!media) replyText = "⚠️ Error downloading audio. Try again.";
             else {
                 const response = await callGemini('gemini-2.5-flash', {
                     contents: {

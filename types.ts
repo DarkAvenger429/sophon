@@ -45,6 +45,20 @@ export interface SocialAnalysis {
     hotSpots: string[]; // Platforms e.g., ["Twitter", "Reddit"]
 }
 
+export interface CommunityVotes {
+    up: number;   // "Confirmed"
+    down: number; // "Disputed"
+    userVoted?: 'up' | 'down' | null; // Local user state
+}
+
+export interface CommunityNote {
+    id: string;
+    text: string;
+    sourceUrl?: string;
+    isVerified: boolean; // AI Audited
+    timestamp: number;
+}
+
 export interface Report {
   id: string;
   timestamp: number;
@@ -62,7 +76,20 @@ export interface Report {
   relatedThemes: string[];
   entities: string[];
   evolutionTrace?: EvolutionStage[];
-  socialPulse?: SocialAnalysis; // NEW FIELD
+  socialPulse?: SocialAnalysis;
+  timeContext?: 'Breaking' | 'Recent' | 'Old' | 'Very Old';
+  communityVotes?: CommunityVotes;
+  communityNotes?: CommunityNote[];
+}
+
+export interface NewsItem {
+    id: string;
+    headline: string;
+    summary: string;
+    source: string;
+    time: string;
+    url: string;
+    upvotes: number;
 }
 
 export enum AgentStatus {

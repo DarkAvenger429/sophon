@@ -1,22 +1,32 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const neutralizeBtn = document.getElementById('neutralizeBtn');
-    const scanPageBtn = document.getElementById('scanPageBtn');
+    const toggle = document.getElementById('toggleScan');
+    const statusDot = document.getElementById('statusDot');
 
-    neutralizeBtn.addEventListener('click', () => {
+    // Load state
+    chrome.storage.local.get(['sophonActive'], (result) => {
+        const isActive = result.sophonActive !== false;
+        toggle.checked = isActive;
+        updateStatus(isActive);
+    });
+
+    toggle.addEventListener('change', () => {
+        const isActive = toggle.checked;
+        chrome.storage.local.set({ sophonActive: isActive });
+        updateStatus(isActive);
+
+        // Send message to content script
         chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-            chrome.tabs.sendMessage(tabs[0].id, {action: "activateNeutralizer"});
-            neutralizeBtn.textContent = "PAGE NEUTRALIZED";
-            neutralizeBtn.style.borderColor = "#00ff9f";
-            neutralizeBtn.style.color = "#00ff9f";
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, { action: "toggle", status: isActive });
+            }
         });
     });
 
-    scanPageBtn.addEventListener('click', () => {
-        // Reuse existing scan logic or placeholder for demo
-        scanPageBtn.textContent = "SCANNING...";
-        setTimeout(() => {
-            scanPageBtn.textContent = "VERDICT: CREDIBLE (92%)";
-            scanPageBtn.style.background = "#00ff9f";
-        }, 1500);
-    });
+    function updateStatus(active) {
+        if (active) {
+            statusDot.classList.remove('inactive');
+        } else {
+            statusDot.classList.add('inactive');
+        }
+    }
 });

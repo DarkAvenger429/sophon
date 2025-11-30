@@ -3,7 +3,6 @@ import { ethers } from 'ethers';
 import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI for Semantic Hashing
-// NOTE: In a real app, this should be secure, but for the demo, we use the client key.
 let ai: GoogleGenAI | null = null;
 try {
     // @ts-ignore
@@ -17,7 +16,6 @@ export interface WalletState {
   chainId: string | null;
 }
 
-// Check if MetaMask is installed
 const getProvider = () => {
   if (typeof window !== 'undefined' && (window as any).ethereum) {
     return new ethers.BrowserProvider((window as any).ethereum);
@@ -26,21 +24,25 @@ const getProvider = () => {
 };
 
 export const connectWallet = async (): Promise<WalletState> => {
+  // 1. Check for global provider presence immediately
+  const hasWeb3 = typeof window !== 'undefined' && (window as any).ethereum;
+
+  if (!hasWeb3) {
+      console.warn("MetaMask not detected. Activating SIMULATION MODE.");
+      // Simulate network delay for realism
+      await new Promise(r => setTimeout(r, 600));
+      return {
+          address: "0xSIMULATED_WALLET_" + Math.floor(Math.random() * 9999).toString(),
+          isConnected: true,
+          chainId: "1337"
+      };
+  }
+
   try {
     const provider = getProvider();
+    if (!provider) throw new Error("Provider initialization failed");
     
-    // --- FALLBACK: SIMULATION MODE ---
-    if (!provider) {
-      console.warn("MetaMask not found. Falling back to SIMULATION MODE for Demo.");
-      await new Promise(resolve => setTimeout(resolve, 800));
-      return {
-        address: "0x71C7656EC7ab88b098defB751B7401B5f6d89A23", 
-        isConnected: true,
-        chainId: "11155111" 
-      };
-    }
-
-    // Real Connection
+    // 2. Attempt real connection
     const accounts = await provider.send("eth_requestAccounts", []);
     const network = await provider.getNetwork();
 
@@ -50,29 +52,26 @@ export const connectWallet = async (): Promise<WalletState> => {
       chainId: network.chainId.toString()
     };
   } catch (error) {
-    console.error("Wallet connection failed:", error);
+    console.warn("Wallet connection failed or rejected by user. Fallback to SIMULATION MODE.", error);
+    // 3. Fallback to simulation on error so the app remains usable
     return {
-        address: "0xSIMULATED88b098defB751B7401B5f6d89A23",
+        address: "0x71C7656EC7ab88b098defB751B7401B5f6d89A23",
         isConnected: true,
         chainId: "11155111"
     };
   }
 };
 
-// HELPER: Generate Canonical Fact from Raw Text
 export const getCanonicalFact = async (text: string): Promise<string> => {
-    if (!ai) return text.toLowerCase().trim(); // Fallback if AI not ready
-    
+    if (!ai) return text.toLowerCase().trim();
     try {
         const result = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
             contents: `Convert this headline into a simple, atomic fact string (Subject + Action + Object). No extra words. lowercase. Example: "India wins cup" -> "india wins world cup". Input: "${text}"`
         });
         const fact = result.text?.trim().toLowerCase().replace(/[^\w\s]/gi, '') || text.toLowerCase().trim();
-        console.log(`[SEMANTIC HASH] Raw: "${text}" -> Canonical: "${fact}"`);
         return fact;
     } catch (e) {
-        console.error("Semantic Hashing failed, using raw:", e);
         return text.toLowerCase().trim();
     }
 };
@@ -81,13 +80,11 @@ export const signHeadline = async (headline: string): Promise<{ signature: strin
   try {
     const provider = getProvider();
     
-    // 1. SEMANTIC HASHING STEP
+    // 1. Semantic Hashing
     const canonicalFact = await getCanonicalFact(headline);
-    
-    // 2. Hash the CANONICAL FACT, not the raw headline
     const hash = ethers.hashMessage(canonicalFact);
     
-    // --- FALLBACK: SIMULATED SIGNING ---
+    // --- FALLBACK FOR SIMULATION ---
     if (!provider) {
         await new Promise(resolve => setTimeout(resolve, 1500)); 
         const padding = "0000000000000000000000000000000000000000000000000000000000000000"; 
@@ -95,37 +92,47 @@ export const signHeadline = async (headline: string): Promise<{ signature: strin
         return { signature: fakeSig, hash, fact: canonicalFact };
     }
 
-    // Real Signing
-    const signer = await provider.getSigner();
-    const signature = await signer.signMessage(canonicalFact);
+    try {
+        // 2. EIP-712 Domain
+        const domain = {
+            name: 'Sophon Sentinel',
+            version: '1',
+            chainId: (await provider.getNetwork()).chainId,
+        };
 
-    return { signature, hash, fact: canonicalFact };
+        // 3. The Data Structure
+        const types = {
+            NewsRecord: [
+                { name: 'Headline', type: 'string' },
+                { name: 'CanonicalFact', type: 'string' },
+                { name: 'Timestamp', type: 'string' },
+                { name: 'Publisher', type: 'address' }
+            ]
+        };
+
+        const signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        
+        const value = {
+            Headline: headline,
+            CanonicalFact: canonicalFact,
+            Timestamp: new Date().toISOString(),
+            Publisher: address
+        };
+
+        // 4. Sign Typed Data
+        const signature = await signer.signTypedData(domain, types, value);
+        return { signature, hash, fact: canonicalFact };
+
+    } catch (signingError) {
+        // If user rejects or signing fails, fall back to simulation for demo purposes
+        console.warn("Signing failed/rejected, simulating signature.");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return { signature: "0xSIMULATED_SIGNATURE_" + hash, hash, fact: canonicalFact };
+    }
+
   } catch (error) {
-    console.error("Signing failed:", error);
+    console.error("Signing process failed:", error);
     return null;
   }
-};
-
-export const verifySignature = async (message: string, signature: string, expectedAddress: string): Promise<boolean> => {
-  
-  // 1. Normalize input to Canonical Fact first
-  const canonicalFact = await getCanonicalFact(message);
-
-  // 2. Try Real Cryptographic Verification (Ethers.js)
-  try {
-    const recoveredAddress = ethers.verifyMessage(canonicalFact, signature);
-    if (recoveredAddress.toLowerCase() === expectedAddress.toLowerCase()) {
-        return true;
-    }
-  } catch (error) {}
-
-  // 3. Try Simulation Logic
-  try {
-      const currentHash = ethers.hashMessage(canonicalFact);
-      if (signature.startsWith(currentHash) && signature.length > 100) {
-          return true;
-      }
-  } catch (e) {}
-
-  return false;
 };
