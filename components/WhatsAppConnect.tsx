@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 
 interface WhatsAppConnectProps {
@@ -8,11 +7,13 @@ interface WhatsAppConnectProps {
 }
 
 export const WhatsAppConnect: React.FC<WhatsAppConnectProps> = ({ isOpen, onClose, highContrast }) => {
-  const [sandboxCode, setSandboxCode] = useState('');
+  // Hardcoded Sandbox Code for your specific Twilio instance
+  const sandboxCode = 'village-stared'; 
 
   if (!isOpen) return null;
 
   const sandboxNumber = '+14155238886';
+  // Pre-fill the join message in the link
   const joinLink = `https://wa.me/${sandboxNumber}?text=join%20${sandboxCode}`;
 
   return (
@@ -38,37 +39,27 @@ export const WhatsAppConnect: React.FC<WhatsAppConnectProps> = ({ isOpen, onClos
 
         <div className="space-y-4">
             <div className={`p-4 rounded border ${highContrast ? 'bg-white border-black text-black' : 'bg-black/40 border-gray-700 text-gray-300'}`}>
-                <p className="text-xs font-bold mb-2">STEP 1: ENTER SANDBOX CODE</p>
-                <p className="text-[10px] text-gray-500 mb-3">Found in your Twilio Console (e.g. "join massive-ant")</p>
-                <div className="flex gap-2">
-                    <span className="p-2 bg-gray-800 text-gray-400 rounded text-xs font-mono select-none">join</span>
-                    <input 
-                        type="text" 
-                        value={sandboxCode}
-                        onChange={(e) => setSandboxCode(e.target.value)}
-                        placeholder="your-code-here"
-                        className={`flex-1 bg-transparent border-b ${highContrast ? 'border-black text-black' : 'border-sophon-accent text-white'} focus:outline-none font-mono text-sm`}
-                    />
+                <p className="text-xs font-bold mb-2">STEP 1: ACTIVATE SANDBOX</p>
+                <p className="text-[10px] text-gray-500 mb-3">You must join the secure channel once to start chatting.</p>
+                
+                <div className="flex gap-2 items-center p-3 bg-black/60 rounded border border-gray-700">
+                    <span className="text-sophon-accent font-mono text-sm">join {sandboxCode}</span>
                 </div>
-            </div>
-
-            <div className={`p-4 rounded border ${highContrast ? 'bg-white border-black text-black' : 'bg-black/40 border-gray-700 text-gray-300'} ${!sandboxCode ? 'opacity-50 pointer-events-none' : ''}`}>
-                <p className="text-xs font-bold mb-2">STEP 2: ACTIVATE</p>
+                
                 <a 
                     href={joinLink}
                     target="_blank"
                     rel="noreferrer"
-                    className={`block w-full text-center py-3 rounded font-bold font-mono text-xs transition-colors ${highContrast ? 'bg-black text-white hover:bg-gray-800' : 'bg-sophon-success text-black hover:bg-sophon-success/90'}`}
+                    className={`block w-full text-center py-3 mt-4 rounded font-bold font-mono text-xs transition-colors ${highContrast ? 'bg-black text-white hover:bg-gray-800' : 'bg-sophon-success text-black hover:bg-sophon-success/90'}`}
                 >
-                    CLICK TO CONNECT VIA WHATSAPP
+                    CLICK TO CONNECT INSTANTLY
                 </a>
-                <p className="text-[10px] text-center mt-2 text-gray-500">Or send "join {sandboxCode}" to +1 415 523 8886</p>
             </div>
             
             {/* WARNING BOX */}
             <div className={`p-3 rounded border border-sophon-warning/50 bg-sophon-warning/10 text-center`}>
                 <p className={`text-[10px] font-bold ${highContrast ? 'text-black' : 'text-sophon-warning'}`}>
-                    ⚠️ IMPORTANT: EVERY NEW PHONE NUMBER MUST SEND THE JOIN CODE ONCE TO START CHATTING.
+                    ⚠️ CRITICAL: IF THE BOT DOES NOT REPLY, CLICK THE BUTTON ABOVE AND SEND THE "join" MESSAGE FIRST.
                 </p>
             </div>
         </div>
