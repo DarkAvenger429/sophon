@@ -90,23 +90,23 @@ const generateSimulationReport = (query: string): Report => {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         topic: query,
-        claim: "Analysis generated in Simulation Mode due to API Quota limits.",
+        claim: "Analysis generated in Simulation Mode due to API constraints.",
         verdict: VerdictType.UNCERTAIN,
-        summary: `[SIMULATION MODE ACTIVE] The Gemini API Quota has been exceeded, preventing a live investigation at this specific moment. However, the system remains operational. 
+        summary: `[SIMULATION MODE ACTIVE] The Sophon Sentinel Intelligence Engine is currently operating in failsafe mode due to high network traffic or API quota limits. 
 
-        Typically, a report on "${query}" would contain a deep-dive forensic analysis of 3-5 distinct data vectors, cross-referencing Tier-1 news outlets against social media chatter. This simulation demonstrates the expected data density: detailed timelines, identified 'Patient Zero' accounts, and psychological trigger analysis would appear here.
+        Under normal operation, a query on "${query}" would trigger a multi-vector search across Tier-1 news outlets, social media sentiment analysis, and cross-verification against known fact-checking databases. This simulation demonstrates the report structure including the Origin Matrix (Patient Zero), Temporal Timeline, and Psy-Op Analysis fields.
         
-        Real-time scanning will automatically resume once the API key quota resets. Please check back shortly or try a different query vector.`,
+        Real-time forensic scanning will resume automatically when the connection stabilizes.`,
         confidenceScore: 0,
         sourceReliability: 100,
         sources: [
-            { title: "System Alert: Quota Exceeded", url: "#", category: SourceCategory.UNKNOWN, reliabilityScore: 0, date: new Date().toISOString().split('T')[0] }
+            { title: "System Alert: Quota / Network Limit", url: "#", category: SourceCategory.UNKNOWN, reliabilityScore: 0, date: new Date().toISOString().split('T')[0] }
         ],
-        tags: ["Simulation", "Quota_Exceeded", "System_Alert"],
+        tags: ["Simulation", "Failsafe_Active", "System_Alert"],
         originSector: "SIMULATION_CORE",
         detectedLanguage: "English",
         keyEvidence: [
-            { point: "API Key Quota Limit Reached (HTTP 429)", type: 'CONTRADICTING' },
+            { point: "API Limit or Network Timeout Detected", type: 'CONTRADICTING' },
             { point: "System switched to Fail-Safe Mode to preserve UI integrity.", type: 'SUPPORTING' }
         ],
         relatedThemes: ["System Ops", "API Management"],
@@ -114,7 +114,7 @@ const generateSimulationReport = (query: string): Report => {
         socialPulse: { 
             sentiment: 'ANGRY', 
             score: 85, 
-            topNarrative: "Users are reporting API outages and rate limits across the network.", 
+            topNarrative: "Users are reporting intermittent connectivity with the primary intelligence node.", 
             hotSpots: ["Developer Forums", "System Logs"] 
         },
         timeContext: "Recent",
@@ -123,12 +123,12 @@ const generateSimulationReport = (query: string): Report => {
             platform: "System Core",
             username: "@Admin_Console",
             timestamp: new Date().toISOString(),
-            contentFragment: "Error: Quota Exceeded. Simulation Engaged.",
+            contentFragment: "Error: Service Unavailable. Simulation Engaged.",
             estimatedReach: "Internal Only"
         },
         timeline: [
             { date: new Date().toISOString().split('T')[0], description: "Scan initiated by user.", source: "User Terminal" },
-            { date: new Date().toISOString().split('T')[0], description: "API Connection Failed (429).", source: "Gemini Relay" },
+            { date: new Date().toISOString().split('T')[0], description: "External Link Failed.", source: "Gemini Relay" },
             { date: new Date().toISOString().split('T')[0], description: "Fail-safe Simulation Activated.", source: "Sophon Core" }
         ],
         psychologicalTriggers: ["Frustration", "Impatience"],
@@ -202,19 +202,21 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     try {
         const results = JSON.parse(text);
         if (Array.isArray(results) && results.length > 0) return results;
-        return [{ query: "Breaking Global News", sector: "GLOBAL_NEWS" }];
+        // Fallback if array is empty
+        return [
+            { query: "Simulated: Market Volatility", sector: "GLOBAL_NEWS" },
+            { query: "Simulated: Tech Leak Rumors", sector: "REDDIT_HIVE" }
+        ];
     } catch (e) {
-        return [{ query: "Breaking Global News", sector: "GLOBAL_NEWS" }];
+        throw new Error("Parse Error");
     }
   } catch (error: any) {
-    if (error.message === "QUOTA_EXCEEDED") {
-        return [
-            { query: "Simulated: Market Crash Rumors", sector: "ANON_RUMORS" },
-            { query: "Simulated: Tech Policy Update", sector: "GLOBAL_NEWS" },
-            { query: "Simulated: Viral Video Debunk", sector: "REDDIT_HIVE" }
-        ];
-    }
-    return [{ query: "Breaking Global News", sector: "GLOBAL_NEWS" }];
+    console.warn("Scan failed, using simulation.");
+    return [
+        { query: "Simulated: Market Crash Rumors", sector: "ANON_RUMORS" },
+        { query: "Simulated: Tech Policy Update", sector: "GLOBAL_NEWS" },
+        { query: "Simulated: Viral Video Debunk", sector: "REDDIT_HIVE" }
+    ];
   }
 };
 
@@ -235,25 +237,28 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         });
         
         const text = response.text || "[]";
+        let news = [];
         try {
-            return JSON.parse(text);
+            news = JSON.parse(text);
         } catch(e) {
              const jsonMatch = text.match(/\[.*\]/s);
-             return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+             news = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
         }
+
+        if (!Array.isArray(news) || news.length === 0) {
+            throw new Error("Empty News Response");
+        }
+        return news;
+
     } catch (e: any) {
-        if (e.message === "QUOTA_EXCEEDED") {
-            return generateSimulatedNews() as any;
-        }
-        console.error(e);
-        return [];
+        console.warn("News sync failed, activating simulation wire.");
+        return generateSimulatedNews() as any;
     }
 };
 
 export const investigateTopic = async (query: string, originSector: string = "MANUAL_INPUT", useDeepScan: boolean = false): Promise<Report | null> => {
   try {
     // PHASE 1: INTELLIGENCE GATHERING (Triangulation)
-    // Updated vectors to explicitly target SOCIAL SENTIMENT
     
     const searchVectors = [
         `"${query}" details verified sources`,                // Vector 1: Facts
@@ -304,6 +309,8 @@ export const investigateTopic = async (query: string, originSector: string = "MA
 
     if (fullEvidenceBuffer.length < 50) {
         console.warn("Insufficient evidence gathered.");
+        // If evidence is totally empty, we might want to fallback if it's a connection issue, 
+        // but for now we let the model try to say "UNCERTAIN" unless it threw an error.
     }
 
     const currentDate = new Date().toISOString().split('T')[0];
@@ -416,12 +423,8 @@ export const investigateTopic = async (query: string, originSector: string = "MA
     };
 
   } catch (error: any) {
-    if (error.message === "QUOTA_EXCEEDED") {
-        console.warn("Using Simulation Fallback due to Quota Limit.");
-        return generateSimulationReport(query);
-    }
-    console.error("Deep Investigation Failed", error);
-    return null;
+    console.warn("Using Simulation Fallback due to Error:", error.message);
+    return generateSimulationReport(query);
   }
 };
 
