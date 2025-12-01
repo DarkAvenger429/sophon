@@ -236,7 +236,7 @@ const QUESTION_POOL: Question[] = [
   }
 ];
 
-export const GameMode: React.FC<{ highContrast?: boolean }> = ({ highContrast }) => {
+export const GameMode: React.FC<{ highContrast?: boolean, onXPEarned?: (amount: number) => void }> = ({ highContrast, onXPEarned }) => {
   const [sessionQuestions, setSessionQuestions] = useState<Question[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
@@ -271,6 +271,8 @@ export const GameMode: React.FC<{ highContrast?: boolean }> = ({ highContrast })
       setGameState('PLAYING');
     } else {
       setGameState('GAMEOVER');
+      // Trigger XP Reward
+      if (onXPEarned) onXPEarned(score);
     }
   };
 
@@ -303,7 +305,12 @@ export const GameMode: React.FC<{ highContrast?: boolean }> = ({ highContrast })
               <h2 className="text-2xl font-bold font-mono mb-2">SESSION COMPLETE</h2>
               <div className="text-5xl font-bold text-sophon-success mb-2">{score} / 1000</div>
               <p className="text-xs mb-6 text-gray-400">RATING: {score === 1000 ? 'SOPHON ELITE' : score > 600 ? 'ANALYST' : 'TRAINEE'}</p>
-              <button onClick={startNewSession} className={`px-6 py-2 rounded font-bold text-xs ${highContrast ? 'bg-black text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}>
+              <div className="flex gap-4">
+                  <div className={`px-4 py-2 rounded text-xs font-mono border ${highContrast ? 'bg-gray-200 border-black' : 'bg-sophon-success/10 border-sophon-success text-sophon-success'}`}>
+                      + {score} XP EARNED
+                  </div>
+              </div>
+              <button onClick={startNewSession} className={`mt-6 px-6 py-2 rounded font-bold text-xs ${highContrast ? 'bg-black text-white' : 'bg-gray-700 text-white hover:bg-gray-600'}`}>
                   NEW DRILL SET
               </button>
           </div>
@@ -320,7 +327,7 @@ export const GameMode: React.FC<{ highContrast?: boolean }> = ({ highContrast })
                 {currentQ.category.replace('_', ' ')}
             </span>
             <span className={`text-xs font-mono ${highContrast ? 'text-black font-bold' : 'text-sophon-accent'}`}>
-                XP: {score}
+                SCORE: {score}
             </span>
         </div>
 

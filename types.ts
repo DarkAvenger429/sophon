@@ -59,6 +59,21 @@ export interface CommunityNote {
     timestamp: number;
 }
 
+export interface PatientZero {
+    platform: string;
+    username: string; // e.g. "@dark_knight"
+    timestamp: string;
+    contentFragment: string; // "The first mention..."
+    estimatedReach: string; // "Low" or "1.2M"
+    accountAge?: string; // "New" or "Established"
+}
+
+export interface TimelineEvent {
+    date: string;
+    description: string;
+    source: string;
+}
+
 export interface Report {
   id: string;
   timestamp: number;
@@ -80,6 +95,12 @@ export interface Report {
   timeContext?: 'Breaking' | 'Recent' | 'Old' | 'Very Old';
   communityVotes?: CommunityVotes;
   communityNotes?: CommunityNote[];
+  
+  // New Deep Intel Fields
+  patientZero?: PatientZero;
+  timeline?: TimelineEvent[];
+  psychologicalTriggers?: string[]; // e.g., "Fear", "Tribalism", "Urgency"
+  beneficiaries?: string[]; // Who benefits from this?
 }
 
 export interface NewsItem {

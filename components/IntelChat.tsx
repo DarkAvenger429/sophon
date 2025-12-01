@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Report } from '../types';
 import { chatWithAgent } from '../services/geminiService';
+import { SophonLogo } from './SophonLogo';
 
 interface IntelChatProps {
   report: Report;
@@ -64,7 +65,7 @@ export const IntelChat: React.FC<IntelChatProps> = ({ report, onClose, highContr
         {/* Header */}
         <div className={`p-4 border-b flex justify-between items-center ${highContrast ? 'bg-white text-black' : 'bg-sophon-accent/10 border-sophon-accent/30'}`}>
             <div className="flex items-center gap-3">
-                <img src="/logo.png" className={`w-8 h-8 rounded-full object-cover border ${highContrast ? 'border-black' : 'border-sophon-accent'}`} alt="Sophon Logo" />
+                <SophonLogo className={`w-8 h-8 rounded-full object-cover border ${highContrast ? 'border-black' : 'border-sophon-accent'}`} />
                 <div>
                     <h3 className={`font-bold font-mono ${highContrast ? 'text-black' : 'text-sophon-accent'}`}>DEEP DIVE // INTEL</h3>
                     <div className="flex items-center gap-2">

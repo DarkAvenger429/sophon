@@ -20,7 +20,7 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 // CONFIGURATION
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ';
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
@@ -91,7 +91,7 @@ PROTOCOL:
 
    *[VERDICT_EMOJI] STATUS: [VERIFIED / FALSE / MISLEADING / VERY OLD NEWS / OLD NEWS / RECENT / BREAKING]*
    *DATE:* [YYYY-MM-DD] (Of the actual event)
-   *RISK:* [🔴 HIGH / 🟡 MED / 🟢 LOW]
+   *RISK:* [🔴 HIGH / 🟢 MED / 🟢 LOW]
    *CONFIDENCE:* [0-100]%
 
    *INTEL:*

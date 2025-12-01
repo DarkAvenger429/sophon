@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { SophonLogo } from './SophonLogo';
 
 interface WhatsAppConnectProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const WhatsAppConnect: React.FC<WhatsAppConnectProps> = ({ isOpen, onClos
 
         <div className="text-center mb-6">
             <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 p-1 border-2 ${highContrast ? 'border-black' : 'border-sophon-accent'}`}>
-                <img src="/logo.png" alt="Sophon Agent" className="w-full h-full rounded-full object-cover" />
+                <SophonLogo className="w-full h-full rounded-full object-cover" />
             </div>
             <h2 className={`text-xl font-bold tracking-widest ${highContrast ? 'text-black' : 'text-white'}`}>DEPLOY FIELD AGENT</h2>
             <p className="text-xs text-gray-500 font-mono mt-2">Connect Sophon to WhatsApp for mobile analysis.</p>

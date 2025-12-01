@@ -4,9 +4,8 @@ import { AgentStatus, LogEntry, Report, VerdictType, NewsItem } from './types';
 import { scanForTopics, investigateTopic, analyzeManualQuery, analyzeImageClaim, analyzeAudioClaim, fetchGlobalNews } from './services/geminiService';
 import { TerminalLog } from './components/TerminalLog';
 import { ReportCard } from './components/ReportCard';
-import { RadarPulse } from './components/RadarPulse';
-import { ThreatDashboard } from './components/ThreatDashboard';
 import { HolographicGlobe } from './components/HolographicGlobe';
+import { ThreatDashboard } from './components/ThreatDashboard';
 import { LiveTicker } from './components/LiveTicker';
 import { ArchivePanel } from './components/ArchivePanel';
 import { ImageUploader } from './components/ImageUploader';
@@ -18,6 +17,27 @@ import { GlobalNewsFeed } from './components/GlobalNewsFeed';
 import { GameMode } from './components/GameMode';
 import { DeconstructionLab } from './components/DeconstructionLab';
 import { AgentID } from './components/AgentID';
+import { SophonLogo } from './components/SophonLogo';
+
+// GAMIFICATION CONSTANTS
+const XP_EVENTS = {
+    SCAN_COMPLETE: 50,
+    THREAT_FOUND: 100,
+    MANUAL_ANALYSIS: 25,
+    FORENSIC_ANALYSIS: 40
+};
+
+// Level Up Toast Component
+const LevelUpToast = ({ rank, onClose }: { rank: string, onClose: () => void }) => (
+    <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 animate-fadeIn">
+        <div className="bg-black/90 border-2 border-sophon-accent p-6 rounded-lg shadow-[0_0_50px_rgba(0,240,255,0.4)] text-center">
+            <div className="text-4xl mb-2">⭐</div>
+            <h2 className="text-xl font-bold text-white font-mono tracking-widest">PROMOTION AUTHORIZED</h2>
+            <p className="text-sophon-accent text-sm mt-1">RANK: {rank}</p>
+            <button onClick={onClose} className="mt-4 px-4 py-1 text-xs border border-white/20 hover:bg-white/10 rounded">DISMISS</button>
+        </div>
+    </div>
+);
 
 export default function App() {
   // --- STATE ---
@@ -50,6 +70,41 @@ export default function App() {
   
   const [highContrast, setHighContrast] = useState(false);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // --- XP SYSTEM ---
+  const [xp, setXp] = useState(() => {
+      const saved = localStorage.getItem('sophon_xp');
+      return saved ? parseInt(saved) : 0;
+  });
+  const [showLevelUp, setShowLevelUp] = useState<{show: boolean, rank: string}>({show: false, rank: ''});
+  const prevRankRef = useRef('');
+
+  useEffect(() => {
+    localStorage.setItem('sophon_xp', xp.toString());
+    
+    // Check for rank up (Simple simulation logic mirroring AgentID)
+    const getRank = (x: number) => {
+        if (x > 5000) return 'ARCHITECT';
+        if (x > 2000) return 'SENTINEL';
+        if (x > 500) return 'ANALYST';
+        if (x > 0) return 'OBSERVER';
+        return 'INFORMANT';
+    };
+    
+    const currentRank = getRank(xp);
+    if (prevRankRef.current && currentRank !== prevRankRef.current) {
+        setShowLevelUp({ show: true, rank: currentRank });
+        addLog(`PROMOTION: Agent rank updated to ${currentRank}`, 'success');
+    }
+    prevRankRef.current = currentRank;
+
+  }, [xp]);
+
+  const awardXP = (amount: number, reason: string) => {
+      setXp(prev => prev + amount);
+      // Optional: Add small log for XP? 
+      // addLog(`+${amount} XP: ${reason}`, 'success');
+  };
 
   const toggleHighContrast = () => {
     setHighContrast(!highContrast);
@@ -157,11 +212,14 @@ export default function App() {
           
           if (report) {
              handleNewReport(report);
+             awardXP(XP_EVENTS.SCAN_COMPLETE, "Scan Complete");
+
              const msgType = report.verdict === VerdictType.VERIFIED ? 'success' :
                              report.verdict === VerdictType.FALSE ? 'error' : 'warning';
              
              if (report.verdict === VerdictType.FALSE || report.verdict === VerdictType.MISLEADING) {
                  addLog(`⚠️ THREAT DETECTED: ${report.topic}`, 'error');
+                 awardXP(XP_EVENTS.THREAT_FOUND, "Threat Neutralized");
              } else {
                  addLog(`Verdict: ${report.verdict} [Conf: ${report.confidenceScore}%]`, msgType);
              }
@@ -239,6 +297,8 @@ export default function App() {
         if (report) {
             handleNewReport(report);
             addLog(`Report generated. Lang: ${report.detectedLanguage || 'EN'}`, 'success');
+            awardXP(XP_EVENTS.MANUAL_ANALYSIS, "Manual Query");
+            if (report.verdict === VerdictType.FALSE) awardXP(XP_EVENTS.THREAT_FOUND, "Found Threat");
         } else {
             addLog('Could not retrieve sufficient context.', 'error');
         }
@@ -285,6 +345,7 @@ export default function App() {
 
         if (report) {
             handleNewReport(report);
+            awardXP(XP_EVENTS.FORENSIC_ANALYSIS, "Forensic Scan");
             addLog(`Forensic Analysis Complete. Verdict: ${report.verdict}`, 'success');
         }
     } catch (e) {
@@ -299,6 +360,8 @@ export default function App() {
   return (
     <div className={`min-h-screen ${highContrast ? 'bg-black text-white' : 'bg-sophon-dark text-gray-200'} selection:bg-sophon-accent/30 selection:text-white overflow-x-hidden`}>
       
+      {showLevelUp.show && <LevelUpToast rank={showLevelUp.rank} onClose={() => setShowLevelUp({show: false, rank: ''})} />}
+
       <LiveTicker activeSector={activeSector} threatLevel={threatCount > 5 ? 'HIGH' : 'LOW'} news={globalNews} highContrast={highContrast} />
 
       <WhatsAppConnect isOpen={showConnectModal} onClose={() => setShowConnectModal(false)} highContrast={highContrast} />
@@ -309,7 +372,7 @@ export default function App() {
       <nav className={`sticky top-0 w-full z-50 border-b ${highContrast ? 'bg-black border-white' : 'border-white/5 bg-sophon-dark/90 backdrop-blur-md'}`}>
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 group cursor-pointer">
-            <img src="/logo.png" className={`w-8 h-8 rounded-full object-cover transition-all duration-500 group-hover:scale-110 ${highContrast ? 'border-2 border-white' : 'border border-sophon-accent'}`} alt="Sophon Logo" />
+            <SophonLogo className={`w-8 h-8 rounded-full object-cover transition-all duration-500 group-hover:scale-110 ${highContrast ? 'border-2 border-white' : 'border border-sophon-accent'}`} />
             <h1 className="text-xl font-bold tracking-tight group-hover:text-sophon-accent transition-colors">SOPHON <span className={`font-light ml-2 text-sm hidden sm:inline-block ${highContrast ? 'text-gray-300' : 'text-gray-600'}`}>SENTINEL SYSTEM v2.5</span></h1>
           </div>
 
@@ -376,12 +439,12 @@ export default function App() {
       <main className="pt-8 pb-12 max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
            
-           {/* AGENT PROFILE CARD */}
-           <AgentID reportCount={archive.length} highContrast={highContrast} />
+           {/* AGENT PROFILE CARD - NOW WITH XP FROM APP STATE */}
+           <AgentID xp={xp} highContrast={highContrast} />
 
            <div className={`glass-panel p-6 rounded-lg flex flex-col items-center justify-center relative overflow-hidden ${highContrast ? 'border-2 border-white' : ''}`}>
              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-             {!highContrast && <RadarPulse active={status !== AgentStatus.IDLE} />}
+             {!highContrast && <HolographicGlobe reports={reports} news={globalNews} highContrast={highContrast} />}
              <div className="mt-6 text-center w-full">
                 <h2 className="text-sm font-mono text-gray-400 tracking-widest">THREAT DETECTION</h2>
                 <div className="flex justify-around mt-4 border-t border-white/5 pt-4">
@@ -468,7 +531,7 @@ export default function App() {
                         />
                     </div>
                     <button 
-                    type="submit"
+                    type="submit" 
                     disabled={status !== AgentStatus.IDLE && !isAutoScanning}
                     className={`px-6 py-4 font-bold font-mono rounded-lg transition-all flex items-center justify-center gap-2 min-w-[140px] disabled:opacity-50 ${highContrast ? 'bg-white text-black border-2 border-black hover:bg-gray-200' : 'bg-sophon-accent text-black hover:bg-white hover:shadow-[0_0_15px_rgba(0,240,255,0.6)]'}`}
                     >
@@ -523,16 +586,10 @@ export default function App() {
           <div className="min-h-[400px]">
             {activeTab === 'feed' && (
                 <div className="space-y-4 animate-fadeIn">
-                    {!highContrast && (
-                        <div className="mb-6">
-                            {/* REPLACED HEATMAP WITH HOLOGRAPHIC GLOBE */}
-                            <HolographicGlobe reports={archive} highContrast={highContrast} />
-                        </div>
-                    )}
                     
                     {/* GAME MODE TRAINING */}
                     <div className="mb-6">
-                        <GameMode highContrast={highContrast} />
+                        <GameMode highContrast={highContrast} onXPEarned={(amount) => awardXP(amount, "Cognitive Drill")} />
                     </div>
 
                     {/* EDUCATIONAL HUB */}

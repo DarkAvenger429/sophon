@@ -4,11 +4,26 @@ import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI for Semantic Hashing
 let ai: GoogleGenAI | null = null;
+const fallbackKey = 'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ';
+
 try {
     // @ts-ignore
-    const key = import.meta.env.VITE_API_KEY;
+    let key = '';
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+        // @ts-ignore
+        key = import.meta.env.VITE_API_KEY;
+    }
+    
+    if (!key) key = fallbackKey;
+
     if(key) ai = new GoogleGenAI({ apiKey: key });
-} catch(e) {}
+} catch(e) {
+     // Ensure fallback works if env access fails
+     try {
+        ai = new GoogleGenAI({ apiKey: fallbackKey });
+     } catch(err) {}
+}
 
 export interface WalletState {
   address: string | null;

@@ -21,7 +21,8 @@ const Icons = {
     Alert: () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
     Card: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>,
     Up: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 11v 8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1h-3a1 1 0 0 0-1-1v-6a3 3 0 0 0-6 0v4a2 2 0 0 0 2 2h3z"/><path d="M17 11v8"/></svg>,
-    Down: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 13v-8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3a1 1 0 0 1-1 1v6a3 3 0 0 1-6 0v-4a2 2 0 0 1 2-2h3z"/><path d="M17 13v-8"/></svg>
+    Down: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 13v-8a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-3a1 1 0 0 1-1 1v6a3 3 0 0 1-6 0v-4a2 2 0 0 1 2-2h3z"/><path d="M17 13v-8"/></svg>,
+    Origin: () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.07" y2="4.93"/></svg>
 };
 
 const VerdictBadge = ({ verdict, highContrast }: { verdict: VerdictType, highContrast?: boolean }) => {
@@ -247,7 +248,6 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, highContrast, on
                 <Icons.X />
             </button>
             
-            {/* NEW NEURAL VOICE COMPONENT */}
             <NeuralVoice text={`Verdict: ${report.verdict}. Topic: ${report.topic}. Summary: ${showNeutralized && neutralizedText ? neutralizedText : report.summary}`} highContrast={highContrast} />
 
             <button onClick={downloadReport} title="Download Report" className={`p-2 rounded-lg border transition-all hover:scale-110 ${highContrast ? 'border-white text-white' : 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'}`}>
@@ -261,6 +261,64 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, highContrast, on
         <p className={`text-[10px] uppercase mb-1 font-mono tracking-wider ${highContrast ? 'text-black' : 'text-gray-500'}`}>Analyzed Claim:</p>
         <p className={`italic font-serif text-sm ${highContrast ? 'text-black' : 'text-gray-200'}`}>"{report.claim}"</p>
       </div>
+
+      {/* --- NEW: PATIENT ZERO / ORIGIN MATRIX --- */}
+      {report.patientZero && report.patientZero.username !== 'Unknown' && (
+          <div className={`mb-4 p-4 rounded-lg border-2 relative overflow-hidden ${highContrast ? 'border-black bg-gray-50' : 'border-sophon-accent/30 bg-sophon-accent/5'}`}>
+              <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                      <Icons.Origin />
+                      <span className={`text-[10px] font-bold font-mono uppercase tracking-widest ${highContrast ? 'text-black' : 'text-sophon-accent'}`}>ORIGIN MATRIX // PATIENT ZERO</span>
+                  </div>
+                  <div className="text-[9px] font-mono text-gray-500 uppercase">{report.patientZero.accountAge || 'TARGET IDENTIFIED'}</div>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
+                  <div>
+                      <span className="text-[9px] text-gray-500 block">HANDLE</span>
+                      <span className={`text-sm font-bold font-mono ${highContrast ? 'text-black' : 'text-white'}`}>{report.patientZero.username}</span>
+                  </div>
+                  <div>
+                      <span className="text-[9px] text-gray-500 block">PLATFORM</span>
+                      <span className={`text-sm font-mono ${highContrast ? 'text-black' : 'text-white'}`}>{report.patientZero.platform}</span>
+                  </div>
+                  <div>
+                      <span className="text-[9px] text-gray-500 block">EST. REACH</span>
+                      <span className={`text-sm font-mono ${highContrast ? 'text-black' : 'text-sophon-danger'}`}>{report.patientZero.estimatedReach}</span>
+                  </div>
+                  <div>
+                      <span className="text-[9px] text-gray-500 block">TIMESTAMP</span>
+                      <span className={`text-sm font-mono ${highContrast ? 'text-black' : 'text-white'}`}>{report.patientZero.timestamp}</span>
+                  </div>
+              </div>
+              
+              {report.patientZero.contentFragment && (
+                 <div className={`mt-3 p-2 rounded text-xs italic ${highContrast ? 'bg-white border border-black' : 'bg-black/50 border border-white/10 text-gray-400'}`}>
+                     "{report.patientZero.contentFragment}"
+                 </div>
+              )}
+          </div>
+      )}
+
+      {/* --- NEW: PSY-OP ANALYSIS --- */}
+      {report.psychologicalTriggers && report.psychologicalTriggers.length > 0 && (
+          <div className={`mb-4 p-3 rounded border ${highContrast ? 'border-black bg-white' : 'border-purple-500/30 bg-purple-500/5'}`}>
+               <h4 className={`text-[10px] font-bold font-mono mb-2 uppercase ${highContrast ? 'text-black' : 'text-purple-400'}`}>PSY-OP ANALYSIS // TRIGGERS</h4>
+               <div className="flex flex-wrap gap-2">
+                   {report.psychologicalTriggers.map((trig, i) => (
+                       <span key={i} className={`text-[10px] px-2 py-1 rounded border uppercase font-bold ${highContrast ? 'border-black text-black' : 'border-purple-500/50 text-purple-200'}`}>
+                           {trig}
+                       </span>
+                   ))}
+               </div>
+               {report.beneficiaries && report.beneficiaries.length > 0 && (
+                   <div className="mt-2 pt-2 border-t border-white/5">
+                       <span className="text-[9px] text-gray-500 mr-2">POTENTIAL BENEFICIARIES:</span>
+                       <span className={`text-xs ${highContrast ? 'text-black' : 'text-gray-300'}`}>{report.beneficiaries.join(', ')}</span>
+                   </div>
+               )}
+          </div>
+      )}
 
       {/* SOCIAL PULSE */}
       <div className={`mb-4 p-3 rounded-lg flex items-center gap-4 transition-all ${highContrast ? 'bg-gray-100 text-black border border-black' : 'bg-gradient-to-r from-white/5 to-transparent border border-white/10'}`}>
@@ -371,12 +429,30 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, highContrast, on
           onClick={() => setExpanded(!expanded)}
           className={`text-xs flex items-center justify-between group/btn ${highContrast ? 'text-white' : 'text-gray-400 hover:text-white'}`}
         >
-          <span className="font-mono tracking-wide">{expanded ? 'HIDE SOURCES' : `VIEW SOURCES (${report.sources.length})`}</span>
+          <span className="font-mono tracking-wide">{expanded ? 'HIDE INTEL DATA' : `VIEW DEEP INTEL (${report.sources.length} SOURCES + TIMELINE)`}</span>
           <span className={`transform transition-transform ${expanded ? 'rotate-180' : ''}`}>▼</span>
         </button>
         
         {expanded && (
-          <ul className="mt-2 space-y-2 animate-fadeIn">
+          <div className="mt-2 space-y-4 animate-fadeIn">
+            {/* Timeline */}
+            {report.timeline && report.timeline.length > 0 && (
+                <div className={`p-3 rounded border ${highContrast ? 'bg-gray-50 border-black' : 'bg-black/20 border-gray-800'}`}>
+                    <h5 className={`text-[10px] font-bold font-mono mb-2 ${highContrast ? 'text-black' : 'text-gray-400'}`}>TEMPORAL TIMELINE</h5>
+                    <div className="space-y-3 relative ml-2">
+                        <div className={`absolute left-0 top-1 bottom-1 w-px ${highContrast ? 'bg-black' : 'bg-gray-700'}`}></div>
+                        {report.timeline.map((event, idx) => (
+                            <div key={idx} className="pl-4 relative">
+                                <div className={`absolute left-[-2.5px] top-1.5 w-1.5 h-1.5 rounded-full ${highContrast ? 'bg-black' : 'bg-sophon-accent'}`}></div>
+                                <div className={`text-[9px] font-mono ${highContrast ? 'text-gray-600' : 'text-sophon-accent'}`}>{event.date}</div>
+                                <p className={`text-xs ${highContrast ? 'text-black' : 'text-gray-300'}`}>{event.description}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+          
+            <ul className="space-y-2">
             {report.sources.map((source, idx) => (
               <li key={idx} className={`flex items-center justify-between text-xs p-2.5 rounded-lg border transition-colors ${highContrast ? 'bg-white text-black border-black' : 'bg-black/40 border-white/5 hover:border-white/20 text-gray-300'}`}>
                 <div className="flex flex-col flex-1 min-w-0 pr-2">
@@ -395,6 +471,7 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, highContrast, on
               </li>
             ))}
           </ul>
+          </div>
         )}
 
         {report.evolutionTrace && report.evolutionTrace.length > 0 && (
