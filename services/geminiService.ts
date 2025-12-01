@@ -306,10 +306,15 @@ export const investigateTopic = async (query: string, originSector: string = "MA
         console.warn("Insufficient evidence gathered.");
     }
 
+    const currentDate = new Date().toISOString().split('T')[0];
+
     // PHASE 2: FORENSIC ANALYSIS (The Judge)
     const finalPrompt = `
     Analyze this Triangulated Data.
     
+    CONTEXTUAL DATA:
+    CURRENT DATE: ${currentDate}
+
     EVIDENCE STREAM:
     ${fullEvidenceBuffer}
     
@@ -328,6 +333,10 @@ export const investigateTopic = async (query: string, originSector: string = "MA
         - FALSE: Explicitly debunked by fact-checkers.
         - MISLEADING: Real context twisted.
         - UNCERTAIN: Only social media sources or conflicting reports.
+    5.  **TIME CONTEXT RULES (STRICT)**:
+        - If event happened within the last 7 days (0-7 days ago) -> Output "Recent".
+        - If event happened between 1 week and 5 months ago -> Output "Old".
+        - If event happened more than 5 months ago -> Output "Very Old".
 
     OUTPUT JSON STRUCTURE:
     {
@@ -336,7 +345,7 @@ export const investigateTopic = async (query: string, originSector: string = "MA
       "verdict": "VERIFIED" | "FALSE" | "MISLEADING" | "UNCERTAIN",
       "summary": "Detailed forensic analysis of the event, context, and verification status (approx 150 words). Provide depth.",
       "confidenceScore": number (0-100),
-      "timeContext": "Breaking" | "Recent" | "Old" | "Very Old",
+      "timeContext": "Recent" | "Old" | "Very Old",
       "detectedLanguage": "English",
       "socialPulse": {
           "sentiment": "ANGRY" | "HAPPY" | "NEUTRAL" | "FEARFUL",
