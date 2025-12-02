@@ -1,31 +1,28 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
-// VITE/VERCEL DEPLOYMENT CONFIGURATION
-let apiKey = 'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ';
+// --- API KEY POOL ---
+// ROTATION LOGIC: The system picks a random start key and rotates if limits are hit.
+const API_KEY_POOL = [
+    'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
+    'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
+    'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4',
+    'AIzaSyATaHMWhes05hsETC3b9wtz5nYAvQYqFP8',
+    'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ'
+];
 
+// VITE/VERCEL ENVIRONMENT OVERRIDE
 try {
     // @ts-ignore
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
         // @ts-ignore
-        apiKey = import.meta.env.VITE_API_KEY || apiKey;
-    }
-} catch (e) {
-    // Ignore reference errors in non-Vite environments
-}
-
-// Fallback for local testing
-if (!apiKey) {
-    try {
-        // @ts-ignore
-        if (typeof process !== 'undefined' && process.env?.API_KEY) {
-            // @ts-ignore
-            apiKey = process.env.API_KEY || apiKey;
+        const envKey = import.meta.env.VITE_API_KEY;
+        if (envKey && !API_KEY_POOL.includes(envKey)) {
+            API_KEY_POOL.unshift(envKey);
         }
-    } catch (e) {}
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey });
+    }
+} catch (e) {}
 
 const SYSTEM_INSTRUCTION = `
 You are SOPHON, a Global Situational Awareness Engine.
@@ -48,35 +45,6 @@ Strict JSON. No markdown.
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-// --- TENACIOUS RETRY LOGIC ---
-async function callGeminiWithRetry(modelName: string, params: any, retries = 6) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await ai.models.generateContent({
-                model: modelName,
-                ...params
-            });
-        } catch (error: any) {
-            // If it's the last try, throw to trigger fallback
-            if (i === retries - 1) {
-                console.error("❌ Gemini API Failed after max persistence.");
-                throw error;
-            }
-
-            // Exponential Backoff
-            // 429/503 = Quota/Overload. Wait longer (3s -> 6s -> 12s...)
-            // Others = Network blip. Wait (1s -> 2s -> 4s...)
-            const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
-            const baseDelay = isQuota ? 3000 : 1000;
-            const delay = baseDelay * Math.pow(2, i);
-
-            console.warn(`⚠️ API Issue (${error.status || error.message}). Tenacious Retry ${i+1}/${retries} in ${delay}ms...`);
-            await sleep(delay);
-        }
-    }
-    throw new Error("Gemini API Unresponsive");
-}
-
 const checkBadActor = (url: string): { isSuspicious: boolean, scorePenalty: number } => {
     const lowerUrl = url.toLowerCase();
     if (lowerUrl.includes('.xyz') || lowerUrl.includes('.top')) return { isSuspicious: true, scorePenalty: 80 };
@@ -89,78 +57,96 @@ const checkBadActor = (url: string): { isSuspicious: boolean, scorePenalty: numb
     return { isSuspicious: false, scorePenalty: 10 }; // Default penalty for unknown
 };
 
-// --- STEALTH FALLBACKS (Only used if 6 retries fail) ---
-const generateSimulationReport = (query: string): Report => {
-    return {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        topic: query,
-        claim: "Breaking news report analyzed for veracity.",
-        verdict: VerdictType.VERIFIED, 
-        summary: `Analysis confirms the core details regarding "${query}" are accurate based on cross-referenced reliable nodes. Multiple independent sources have corroborated the timeline. No evidence of coordinated manipulation detected at this stage.`,
-        confidenceScore: 92,
-        sourceReliability: 95,
-        sources: [
-            { title: "Reuters International", url: "https://reuters.com", category: SourceCategory.NEWS, reliabilityScore: 98, date: new Date().toISOString().split('T')[0] },
-            { title: "Associated Press", url: "https://apnews.com", category: SourceCategory.NEWS, reliabilityScore: 96, date: new Date().toISOString().split('T')[0] }
-        ],
-        tags: ["Verified_Event", "Global_Wire"],
-        originSector: "GLOBAL_MONITOR",
-        detectedLanguage: "English",
-        keyEvidence: [
-            { point: "Event confirmed by Tier-1 wire services.", type: 'SUPPORTING' },
-            { point: "Official statements issued matching report details.", type: 'SUPPORTING' }
-        ],
-        relatedThemes: ["International Affairs", "Breaking News"],
-        entities: ["Sophon Sentinel"],
-        socialPulse: { 
-            sentiment: 'NEUTRAL', 
-            score: 65, 
-            topNarrative: "Public consensus aligns with verified reporting.", 
-            hotSpots: ["Twitter", "News Aggregators"] 
-        },
-        timeContext: "Recent",
-        communityVotes: { up: 12, down: 1 },
-        patientZero: {
-            platform: "Official Wire",
-            username: "Reuters",
-            timestamp: new Date().toISOString(),
-            contentFragment: "Urgent wire dispatch...",
-            estimatedReach: "Global"
-        },
-        timeline: [
-            { date: new Date().toISOString().split('T')[0], description: "Initial reports verified.", source: "Wire Service" }
-        ],
-        psychologicalTriggers: ["Information Seeking"],
-        beneficiaries: ["Public Awareness"]
-    };
-};
+// --- SMART KEY ROTATION & CALLER ---
+async function callGeminiWithRotation(modelName: string, params: any) {
+    let lastError;
+    
+    // Clean pool of placeholders
+    const validKeys = API_KEY_POOL.filter(k => k && !k.includes('PASTE_'));
+    const startIndex = Math.floor(Math.random() * validKeys.length);
+
+    for (let i = 0; i < validKeys.length; i++) {
+        const keyIndex = (startIndex + i) % validKeys.length;
+        const currentKey = validKeys[keyIndex];
+        const isLastKey = validKeys.length === 1 || i === validKeys.length - 1;
+
+        const ai = new GoogleGenAI({ apiKey: currentKey });
+
+        // Retry loop for the CURRENT key (Persistence)
+        // If we have multiple keys, we retry less (fail fast to rotate). 
+        // If we have 1 key, we retry more (wait for quota).
+        const maxRetries = isLastKey ? 4 : 1; 
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                return await ai.models.generateContent({
+                    model: modelName,
+                    ...params
+                });
+            } catch (error: any) {
+                lastError = error;
+                
+                // Check for Quota Limits (429) or Overload (503)
+                const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
+                
+                if (isQuota) {
+                    if (isLastKey) {
+                        // If this is our last/only key, we MUST wait.
+                        const delay = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s, 16s
+                        console.warn(`⚠️ Quota Hit on LAST Key. Waiting ${delay}ms to recover...`);
+                        await sleep(delay);
+                        continue; // Retry this key
+                    } else {
+                        console.warn(`⚠️ Key exhausted. Rotating to next...`);
+                        break; // Break inner loop to rotate to next key in outer loop
+                    }
+                }
+                
+                // If other error (400, etc), throw immediately unless it's network related
+                if (!isQuota && attempt === maxRetries - 1) throw error;
+            }
+        }
+    }
+    
+    // If we reach here, ALL keys failed.
+    console.error("❌ ALL API KEYS EXHAUSTED OR FAILED.");
+    throw lastError || new Error("All API keys failed.");
+}
 
 export const scanForTopics = async (focus?: string): Promise<{ query: string, sector: string }[]> => {
   try {
     const prompt = `
         Act as a News Aggregator.
-        List 3 REAL, CURRENT global news headlines (Geopolitics, Tech, Finance).
+        List 3 REAL, CURRENT global news headlines (Geopolitics, Tech, Finance) from the last 24 hours.
         Output STRICT JSON Array: 
         [{"query": "Headline 1", "sector": "SECTOR_GEO"}, {"query": "Headline 2", "sector": "SECTOR_TECH"}, {"query": "Headline 3", "sector": "SECTOR_FIN"}]
     `;
     
-    const response = await callGeminiWithRetry('gemini-2.5-flash', {
+    const response = await callGeminiWithRotation('gemini-2.5-flash', {
       contents: prompt,
-      config: { tools: [{ googleSearch: {} }] }
+      config: { 
+          tools: [{ googleSearch: {} }],
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+          ]
+      }
     });
     
     const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
     const results = JSON.parse(text);
-    if (Array.isArray(results) && results.length > 0) return results;
-    throw new Error("Empty Results");
+    if (Array.isArray(results) && results.length > 0) {
+        // Cache success
+        localStorage.setItem('sophon_topic_cache', JSON.stringify(results));
+        return results;
+    }
+    return [];
   } catch (error: any) {
-    console.warn("Using Stealth Fallback for Scan");
-    return [
-        { query: "Global Markets Update: Tech Sector Rally", sector: "SECTOR_FIN" },
-        { query: "International Summit on AI Safety", sector: "SECTOR_TECH" },
-        { query: "Energy Policy Updates G20", sector: "SECTOR_GEO" }
-    ];
+    console.warn("Scanning Failed. Using Cached Real Data.");
+    const cached = localStorage.getItem('sophon_topic_cache');
+    return cached ? JSON.parse(cached) : []; // Return cache or empty
   }
 };
 
@@ -170,78 +156,81 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         List 5 top global news headlines. JSON Array format.
         [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}]
         `;
-        const response = await callGeminiWithRetry('gemini-2.5-flash', {
+        const response = await callGeminiWithRotation('gemini-2.5-flash', {
             contents: prompt,
             config: { 
                 tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+                ]
             }
         });
         
         const text = response.text || "[]";
-        return JSON.parse(text);
+        const data = JSON.parse(text);
+        if (Array.isArray(data) && data.length > 0) {
+            localStorage.setItem('sophon_news_cache', JSON.stringify(data));
+            return data;
+        }
+        return [];
     } catch (e: any) {
-        console.warn("Using Stealth Fallback for News");
-        return [
-            { headline: "Market Analysis: Global Supply Chains Stabilize", summary: "Logistics reports indicate normalization of major shipping routes following recent disruptions.", source: "Reuters", time: "1h ago", url: "https://news.google.com" },
-            { headline: "Tech Innovation: New AI Standards Proposed", summary: "Industry leaders gather to discuss safety protocols for next-gen models.", source: "Bloomberg", time: "2h ago", url: "https://news.google.com" },
-            { headline: "Climate Accord: Nations Sign New Pact", summary: "Delegates reach agreement on renewable energy targets for 2030.", source: "AP News", time: "3h ago", url: "https://news.google.com" },
-            { headline: "Space Exploration: Satellite Launch Successful", summary: "Communications array successfully deployed into low earth orbit.", source: "SpaceNews", time: "4h ago", url: "https://news.google.com" },
-            { headline: "Economic Outlook: Inflation Data Released", summary: "Central banks review interest rate policies amidst new consumer price index data.", source: "Financial Times", time: "5h ago", url: "https://news.google.com" }
-        ];
+        console.warn("News Feed Sync Failed. Using Cached Real Data.");
+        const cached = localStorage.getItem('sophon_news_cache');
+        return cached ? JSON.parse(cached) : [];
     }
 };
 
 export const investigateTopic = async (query: string, originSector: string = "MANUAL_INPUT", useDeepScan: boolean = false): Promise<Report | null> => {
   try {
-    // PHASE 1: PARALLEL MONITORING
-    const searchVectors = [
-        `"${query}" verified facts news`,
-        `"${query}" public sentiment`,
-        `"${query}" origin source`
-    ];
+    // 1. UNIFIED SEARCH VECTOR
+    const masterQuery = `Conduct a forensic investigation on: "${query}". Find verified facts, latest news updates, the original source/date, and public sentiment/reactions.`;
 
     let fullEvidenceBuffer = "";
     let validSources: Source[] = [];
 
-    const fetchVector = async (vector: string, delay: number) => {
-        await sleep(delay);
-        try {
-            const searchRes = await callGeminiWithRetry('gemini-2.5-flash', {
-                contents: `Find details for: ${vector}`,
-                config: { tools: [{ googleSearch: {} }] }
-            });
+    const searchRes = await callGeminiWithRotation('gemini-2.5-flash', {
+        contents: masterQuery,
+        config: { 
+            tools: [{ googleSearch: {} }],
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+            ]
+        }
+    });
 
-            const chunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-            chunks.forEach((chunk: any) => {
-                if (chunk.web?.uri && chunk.web?.title) {
-                    const url = chunk.web.uri;
-                    const check = checkBadActor(url);
-                    if (!validSources.some(s => s.url === url)) {
-                        validSources.push({
-                            title: chunk.web.title,
-                            url: url,
-                            category: check.isSuspicious ? SourceCategory.UNKNOWN : SourceCategory.NEWS,
-                            reliabilityScore: Math.max(0, 100 - check.scorePenalty),
-                        });
-                    }
-                }
-            });
+    // Harvest Sources
+    const chunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    chunks.forEach((chunk: any) => {
+        if (chunk.web?.uri && chunk.web?.title) {
+            const url = chunk.web.uri;
+            const check = checkBadActor(url);
+            if (!validSources.some(s => s.url === url)) {
+                validSources.push({
+                    title: chunk.web.title,
+                    url: url,
+                    category: check.isSuspicious ? SourceCategory.UNKNOWN : SourceCategory.NEWS,
+                    reliabilityScore: Math.max(0, 100 - check.scorePenalty),
+                });
+            }
+        }
+    });
 
-            if (searchRes.text) return `\n[VECTOR: ${vector}]\n${searchRes.text}\n`;
-        } catch (e) {}
-        return "";
-    };
-
-    const results = await Promise.all(searchVectors.map((v, i) => fetchVector(v, i * 1500))); // Increased stagger to 1.5s
-    fullEvidenceBuffer = results.join("\n");
+    if (searchRes.text) fullEvidenceBuffer = searchRes.text;
     
+    // Sort sources
     validSources.sort((a, b) => b.reliabilityScore - a.reliabilityScore);
     const topSources = validSources.slice(0, 8);
 
     const currentDate = new Date().toISOString().split('T')[0];
 
-    // PHASE 2: REPORT GENERATION
+    // 2. REPORT GENERATION
     const finalPrompt = `
     Analyze this Real-Time Intelligence.
     
@@ -289,7 +278,7 @@ export const investigateTopic = async (query: string, originSector: string = "MA
     }
     `;
 
-    const analysis = await callGeminiWithRetry('gemini-2.5-flash', {
+    const analysis = await callGeminiWithRotation('gemini-2.5-flash', {
         contents: finalPrompt,
         config: { 
             systemInstruction: SYSTEM_INSTRUCTION, 
@@ -299,16 +288,15 @@ export const investigateTopic = async (query: string, originSector: string = "MA
 
     const data = JSON.parse(analysis.text || "{}");
 
-    // Default to a safe structure if AI fails
     return {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         topic: data.topic || query,
         claim: data.claim || `Analysis of "${query}"`,
         verdict: (data.verdict as VerdictType) || VerdictType.VERIFIED,
-        summary: data.summary || "Intelligence acquired. Verifying details.",
+        summary: data.summary || "Intelligence acquired.",
         confidenceScore: data.confidenceScore || 85,
-        sourceReliability: topSources.length > 0 ? topSources[0].reliabilityScore : 90,
+        sourceReliability: topSources.length > 0 ? topSources[0].reliabilityScore : 0,
         sources: topSources,
         tags: data.relatedThemes || [],
         originSector,
@@ -327,23 +315,51 @@ export const investigateTopic = async (query: string, originSector: string = "MA
     };
 
   } catch (error: any) {
-    console.warn("Analysis Error, using Stealth Fallback");
-    return generateSimulationReport(query);
+    console.error("Deep Investigation Failed: API Error.", error);
+    return null; // NO SIMULATION. FAIL GRACEFULLY.
   }
 };
 
 export const searchLedgerSemantically = async (q: string, h: any[]) => [];
 
 export const verifyCommunityNote = async (note: string, context: string): Promise<boolean> => {
-    return true; // Auto-verify for demo stability
+    try {
+        const response = await callGeminiWithRotation('gemini-2.5-flash', {
+            contents: `Verify this note against the context. True or False? \nContext: ${context}\nNote: ${note}\nOutput JSON: {"verified": boolean}`,
+            config: { responseMimeType: "application/json" }
+        });
+        const data = JSON.parse(response.text || "{}");
+        return data.verified || false;
+    } catch(e) { return false; }
 };
 
 export const analyzeManualQuery = async (q: string, deep: boolean) => investigateTopic(q, "USER_INPUT", deep);
 export const analyzeImageClaim = async (b64: string, mime: string) => investigateTopic("Visual Analysis", "FORENSIC", true); 
 export const analyzeAudioClaim = async (b64: string, mime: string) => investigateTopic("Audio Analysis", "FORENSIC", true);
 export const chatWithAgent = async (hist: any[], msg: string, rep: Report) => {
-    return { answer: "Secure channel offline in maintenance mode.", suggestedQuestions: [] };
+    try {
+        const response = await callGeminiWithRotation('gemini-2.5-flash', {
+            contents: hist.concat([{ role: 'user', parts: [{ text: msg }] }]),
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(response.text || "{}");
+    } catch (e) {
+        return { answer: "Secure connection disrupted.", suggestedQuestions: [] };
+    }
 };
-export const neutralizeBias = async (txt: string) => txt; 
+export const neutralizeBias = async (txt: string) => {
+    try {
+        const res = await callGeminiWithRotation('gemini-2.5-flash', { contents: `Rewrite neutrally: ${txt}` });
+        return res.text;
+    } catch (e) { return txt; }
+}; 
 export const findSemanticMatch = async (q: string, list: string[]) => null;
-export const analyzeBotSwarm = async (input: string) => ({ probability: 0, analysis: "", tactics: [] });
+export const analyzeBotSwarm = async (input: string) => {
+    try {
+        const res = await callGeminiWithRotation('gemini-2.5-flash', {
+            contents: `Analyze for bot behavior: ${input}. JSON Output: {probability: number, analysis: string, tactics: string[]}`,
+            config: { responseMimeType: "application/json" }
+        });
+        return JSON.parse(res.text || "{}");
+    } catch(e) { return { probability: 0, analysis: "Analysis Failed", tactics: [] }; }
+};

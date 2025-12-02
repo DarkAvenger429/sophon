@@ -20,16 +20,59 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 // CONFIGURATION
 const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ';
 const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
-// Initialize Services
-let ai;
-try {
-    ai = new GoogleGenAI({ apiKey: API_KEY });
-} catch (e) {
-    console.error("Gemini Init Error:", e);
+// --- API KEY POOL (BACKEND) ---
+const API_KEY_POOL = [
+    'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
+    'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
+    'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4',
+    'AIzaSyATaHMWhes05hsETC3b9wtz5nYAvQYqFP8',
+    'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ'
+];
+
+// Fallback to env var if exists
+if (process.env.GEMINI_API_KEY && !API_KEY_POOL.includes(process.env.GEMINI_API_KEY)) {
+    API_KEY_POOL.unshift(process.env.GEMINI_API_KEY);
+}
+
+// HELPER: Sleep
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// --- SMART ROTATION FOR BACKEND ---
+async function callGemini(modelName, params) {
+    let lastError;
+    const startIndex = Math.floor(Math.random() * API_KEY_POOL.length);
+
+    for (let i = 0; i < API_KEY_POOL.length; i++) {
+        const keyIndex = (startIndex + i) % API_KEY_POOL.length;
+        const currentKey = API_KEY_POOL[keyIndex];
+        const isLastKey = API_KEY_POOL.length === 1 || i === API_KEY_POOL.length - 1;
+
+        const ai = new GoogleGenAI({ apiKey: currentKey });
+        const maxRetries = isLastKey ? 2 : 1; // Don't retry too much on one key if we have others
+
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                return await ai.models.generateContent({
+                    model: modelName,
+                    ...params
+                });
+            } catch (error) {
+                lastError = error;
+                const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
+                
+                if (isQuota) {
+                    console.warn(`⚠️ [Backend] Quota hit on key ${keyIndex}. Rotating...`);
+                    if (isLastKey) await sleep(2000); // Panic wait
+                    break; // Break inner to rotate
+                }
+                if (!isQuota) throw error; // Real error
+            }
+        }
+    }
+    throw lastError || new Error("Backend AI Unresponsive");
 }
 
 let client;
@@ -105,27 +148,6 @@ PROTOCOL:
    2. [Source Name] - [Link if available]
    (MUST include at least 2 distinct Tier-1 sources like Reuters, AP, BBC, CNN, Al Jazeera, or Gov websites. Do not omit.)
 `;
-
-// HELPER: Sleep/Retry
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-async function callGemini(modelName, params, retries = 3) {
-    if (!ai) return { text: "System Error: AI not initialized." };
-    
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await ai.models.generateContent({ model: modelName, ...params });
-        } catch (error) {
-            if (error.status === 503 || error.code === 503 || error.status === 429) {
-                console.warn(`⚠️ Gemini Busy. Retrying...`);
-                await sleep(2000 * (i + 1)); 
-                continue;
-            }
-            throw error; 
-        }
-    }
-    throw new Error("Gemini API Unresponsive");
-}
 
 // HELPER: Download Media
 async function downloadMedia(url) {
