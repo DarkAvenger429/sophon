@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sophon - Information Sentinel</title>
-    <link rel="icon" type="image/jpeg" href="/logo.jpg?v=6" />
+    <link rel="icon" type="image/jpeg" href="/logo.jpg?v=7" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -25,6 +25,7 @@
                 danger: '#ff003c', // Cyberpunk Red
                 success: '#00ff9f',
                 warning: '#fcee0a',
+                purple: '#b026ff',
               }
             },
             animation: {
@@ -32,6 +33,7 @@
               'scan-line': 'scan 2s linear infinite',
               'marquee': 'marquee 160s linear infinite',
               'fadeIn': 'fadeIn 0.5s ease-out',
+              'breathing': 'breathing 8s ease-in-out infinite',
             },
             keyframes: {
               scan: {
@@ -45,6 +47,10 @@
               fadeIn: {
                 '0%': { opacity: '0', transform: 'translateY(10px)' },
                 '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              breathing: {
+                '0%, 100%': { opacity: '0.4' },
+                '50%': { opacity: '0.7' },
               }
             }
           },
@@ -54,27 +60,46 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
       body {
-        background-color: #050505;
+        background-color: #020204;
         color: #e5e5e5;
         font-family: 'Inter', sans-serif;
+        overflow-x: hidden;
       }
+      
+      /* CRT SCANLINE OVERLAY */
+      body::after {
+        content: " ";
+        display: block;
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+        z-index: 9999;
+        background-size: 100% 2px, 3px 100%;
+        pointer-events: none;
+      }
+
       .glass-panel {
-        background: rgba(20, 20, 20, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgba(15, 15, 20, 0.6);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
       }
+      
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
         background: #0a0a0a;
       }
       ::-webkit-scrollbar-thumb {
         background: #333;
-        border-radius: 4px;
+        border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #00f0ff;
@@ -89,36 +114,20 @@
 
       /* ACCESSIBILITY OVERRIDES (HIGH CONTRAST MODE) */
       body.high-contrast {
-        background-color: #000000 !important;
-        color: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
       }
       body.high-contrast * {
         backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
         text-shadow: none !important;
         box-shadow: none !important;
-        animation: none !important; /* Stop all motion */
-        transition: none !important;
+        animation: none !important;
+        background-image: none !important;
       }
+      body.high-contrast::after { display: none; }
       body.high-contrast .glass-panel {
-        background: #000000 !important;
-        border: 2px solid #ffffff !important;
-      }
-      body.high-contrast .text-gray-500, 
-      body.high-contrast .text-gray-400, 
-      body.high-contrast .text-gray-600 {
-        color: #e0e0e0 !important; /* Increase contrast of muted text */
-      }
-      /* Ensure links/buttons stand out */
-      body.high-contrast button, 
-      body.high-contrast a {
-        text-decoration: underline !important;
-        border-width: 1px !important;
-      }
-      /* Keyboard Focus Outline */
-      body.high-contrast *:focus-visible {
-        outline: 4px solid #ffffff !important;
-        outline-offset: 2px !important;
+        background: #ffffff !important;
+        border: 2px solid #000000 !important;
       }
     </style>
 <script type="importmap">
@@ -141,7 +150,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
