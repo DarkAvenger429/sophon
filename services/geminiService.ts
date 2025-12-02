@@ -3,7 +3,6 @@ import { GoogleGenAI } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
 // --- API KEY POOL ---
-// ROTATION LOGIC: The system picks a random start key and rotates if limits are hit.
 const API_KEY_POOL = [
     'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
     'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
@@ -57,25 +56,53 @@ const checkBadActor = (url: string): { isSuspicious: boolean, scorePenalty: numb
     return { isSuspicious: false, scorePenalty: 10 }; // Default penalty for unknown
 };
 
+// --- CACHE HELPERS ---
+const CACHE_KEYS = {
+    NEWS: 'sophon_cache_news',
+    TOPICS: 'sophon_cache_topics'
+};
+
+const saveToCache = (key: string, data: any) => {
+    try {
+        if (!data || (Array.isArray(data) && data.length === 0)) return;
+        const payload = { timestamp: Date.now(), data };
+        localStorage.setItem(key, JSON.stringify(payload));
+    } catch (e) {
+        console.warn("Cache Save Failed", e);
+    }
+};
+
+const getFromCache = (key: string, maxAgeHours: number = 24) => {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const payload = JSON.parse(raw);
+        const age = (Date.now() - payload.timestamp) / (1000 * 60 * 60);
+        if (age > maxAgeHours) return null; // Expired
+        return payload.data;
+    } catch (e) {
+        return null;
+    }
+};
+
 // --- SMART KEY ROTATION & CALLER ---
 async function callGeminiWithRotation(modelName: string, params: any) {
     let lastError;
     
     // Clean pool of placeholders
     const validKeys = API_KEY_POOL.filter(k => k && !k.includes('PASTE_'));
+    // Random start to distribute load
     const startIndex = Math.floor(Math.random() * validKeys.length);
 
     for (let i = 0; i < validKeys.length; i++) {
         const keyIndex = (startIndex + i) % validKeys.length;
         const currentKey = validKeys[keyIndex];
-        const isLastKey = validKeys.length === 1 || i === validKeys.length - 1;
+        const isLastKey = i === validKeys.length - 1;
 
         const ai = new GoogleGenAI({ apiKey: currentKey });
-
-        // Retry loop for the CURRENT key (Persistence)
-        // If we have multiple keys, we retry less (fail fast to rotate). 
-        // If we have 1 key, we retry more (wait for quota).
-        const maxRetries = isLastKey ? 4 : 1; 
+        
+        // If it's the last key, try a bit harder (2 attempts), otherwise rotate fast
+        const maxRetries = isLastKey ? 2 : 1; 
 
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
@@ -85,31 +112,26 @@ async function callGeminiWithRotation(modelName: string, params: any) {
                 });
             } catch (error: any) {
                 lastError = error;
-                
-                // Check for Quota Limits (429) or Overload (503)
                 const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
                 
                 if (isQuota) {
-                    if (isLastKey) {
-                        // If this is our last/only key, we MUST wait.
-                        const delay = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s, 16s
-                        console.warn(`⚠️ Quota Hit on LAST Key. Waiting ${delay}ms to recover...`);
+                    if (isLastKey && attempt < maxRetries - 1) {
+                        // Wait if it's our last hope
+                        const delay = 2000; 
+                        console.warn(`⚠️ Quota Hit on Last Key. Waiting ${delay}ms...`);
                         await sleep(delay);
-                        continue; // Retry this key
+                        continue; 
                     } else {
-                        console.warn(`⚠️ Key exhausted. Rotating to next...`);
-                        break; // Break inner loop to rotate to next key in outer loop
+                        // Rotate to next key immediately
+                        break; 
                     }
                 }
-                
-                // If other error (400, etc), throw immediately unless it's network related
-                if (!isQuota && attempt === maxRetries - 1) throw error;
+                // If it's a real error (400, etc), throw immediately
+                if (!isQuota) throw error;
             }
         }
     }
-    
-    // If we reach here, ALL keys failed.
-    console.error("❌ ALL API KEYS EXHAUSTED OR FAILED.");
+    console.error("❌ ALL API KEYS EXHAUSTED.");
     throw lastError || new Error("All API keys failed.");
 }
 
@@ -118,6 +140,8 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     const prompt = `
         Act as a News Aggregator.
         List 3 REAL, CURRENT global news headlines (Geopolitics, Tech, Finance) from the last 24 hours.
+        Use Google Search to verify they are real.
+        
         Output STRICT JSON Array: 
         [{"query": "Headline 1", "sector": "SECTOR_GEO"}, {"query": "Headline 2", "sector": "SECTOR_TECH"}, {"query": "Headline 3", "sector": "SECTOR_FIN"}]
     `;
@@ -126,87 +150,141 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
       contents: prompt,
       config: { 
           tools: [{ googleSearch: {} }],
-          safetySettings: [
-            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-          ]
+          // responseMimeType REMOVED to avoid 400 error with tools
       }
     });
     
+    // Manually parse JSON since we removed responseMimeType
     const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
-    const results = JSON.parse(text);
+    let results = [];
+    try {
+        results = JSON.parse(text);
+    } catch (e) {
+        const match = text.match(/\[.*\]/s);
+        if (match) results = JSON.parse(match[0]);
+    }
+
     if (Array.isArray(results) && results.length > 0) {
-        // Cache success
-        localStorage.setItem('sophon_topic_cache', JSON.stringify(results));
+        saveToCache(CACHE_KEYS.TOPICS, results); // Cache successful result
         return results;
     }
-    return [];
+    throw new Error("Empty scan results");
+
   } catch (error: any) {
-    console.warn("Scanning Failed. Using Cached Real Data.");
-    const cached = localStorage.getItem('sophon_topic_cache');
-    return cached ? JSON.parse(cached) : []; // Return cache or empty
+    console.warn("Scan Failed, attempting cache fallback:", error.message);
+    const cached = getFromCache(CACHE_KEYS.TOPICS);
+    if (cached) return cached;
+    return []; // Return empty only if both API and Cache fail
   }
 };
 
 export const fetchGlobalNews = async (): Promise<{headline: string, summary: string, source: string, time: string, url: string}[]> => {
     try {
         const prompt = `
-        List 5 top global news headlines. JSON Array format.
-        [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}]
+        Find 6 TOP GLOBAL NEWS headlines from the last 12 hours.
+        Return strictly JSON.
+        Format: [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}]
         `;
+        
         const response = await callGeminiWithRotation('gemini-2.5-flash', {
             contents: prompt,
             config: { 
                 tools: [{ googleSearch: {} }],
-                responseMimeType: "application/json",
                 safetySettings: [
-                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
                 ]
             }
         });
         
-        const text = response.text || "[]";
-        const data = JSON.parse(text);
-        if (Array.isArray(data) && data.length > 0) {
-            localStorage.setItem('sophon_news_cache', JSON.stringify(data));
-            return data;
+        const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
+        let results = [];
+        try {
+            results = JSON.parse(text);
+        } catch (e) {
+            const match = text.match(/\[.*\]/s);
+            if (match) results = JSON.parse(match[0]);
         }
-        return [];
+
+        if (Array.isArray(results) && results.length > 0) {
+            saveToCache(CACHE_KEYS.NEWS, results);
+            return results;
+        }
+        throw new Error("Empty news results");
+
     } catch (e: any) {
-        console.warn("News Feed Sync Failed. Using Cached Real Data.");
-        const cached = localStorage.getItem('sophon_news_cache');
-        return cached ? JSON.parse(cached) : [];
+        console.warn("News Fetch Failed, attempting cache fallback:", e.message);
+        const cached = getFromCache(CACHE_KEYS.NEWS);
+        if (cached) return cached;
+        return [];
     }
 };
 
 export const investigateTopic = async (query: string, originSector: string = "MANUAL_INPUT", useDeepScan: boolean = false): Promise<Report | null> => {
   try {
-    // 1. UNIFIED SEARCH VECTOR
-    const masterQuery = `Conduct a forensic investigation on: "${query}". Find verified facts, latest news updates, the original source/date, and public sentiment/reactions.`;
+    // UNIFIED SEARCH VECTOR (Efficient)
+    const vectorPrompt = `
+    Conduct a forensic investigation on: "${query}"
+    
+    Using Google Search, find:
+    1. Verified facts and news coverage.
+    2. Verification status (fact checks).
+    3. Public sentiment/reaction.
+    4. Origin/Source of the claim.
+    
+    Then, OUTPUT ONLY A JSON OBJECT matching this structure:
+    {
+      "topic": "Concise Headline",
+      "claim": "The core event/claim",
+      "verdict": "VERIFIED" | "DEVELOPING" | "FALSE" | "MISLEADING" | "UNCERTAIN",
+      "summary": "Forensic summary (approx 150 words).",
+      "confidenceScore": 90,
+      "timeContext": "Recent",
+      "detectedLanguage": "English",
+      "socialPulse": { "sentiment": "NEUTRAL", "score": 50, "topNarrative": "...", "hotSpots": ["Twitter"] },
+      "patientZero": { "platform": "...", "username": "...", "timestamp": "...", "contentFragment": "...", "estimatedReach": "..." },
+      "relatedThemes": ["Tag1", "Tag2"],
+      "entities": ["Entity1"],
+      "keyEvidence": [{ "point": "...", "type": "SUPPORTING" }]
+    }
+    `;
 
-    let fullEvidenceBuffer = "";
-    let validSources: Source[] = [];
+    const currentDate = new Date().toISOString().split('T')[0];
 
-    const searchRes = await callGeminiWithRotation('gemini-2.5-flash', {
-        contents: masterQuery,
+    const response = await callGeminiWithRotation('gemini-2.5-flash', {
+        contents: vectorPrompt,
         config: { 
             tools: [{ googleSearch: {} }],
+            systemInstruction: SYSTEM_INSTRUCTION, 
             safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
             ]
         }
     });
 
-    // Harvest Sources
-    const chunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const text = response.text?.replace(/```json|```/g, '').trim() || "{}";
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        // Simple brace finding if parse fails
+        const firstBrace = text.indexOf('{');
+        const lastBrace = text.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            data = JSON.parse(text.substring(firstBrace, lastBrace + 1));
+        } else {
+            data = {};
+        }
+    }
+
+    // Harvest sources from grounding metadata
+    let validSources: Source[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     chunks.forEach((chunk: any) => {
         if (chunk.web?.uri && chunk.web?.title) {
             const url = chunk.web.uri;
@@ -217,86 +295,26 @@ export const investigateTopic = async (query: string, originSector: string = "MA
                     url: url,
                     category: check.isSuspicious ? SourceCategory.UNKNOWN : SourceCategory.NEWS,
                     reliabilityScore: Math.max(0, 100 - check.scorePenalty),
+                    date: currentDate
                 });
             }
         }
     });
-
-    if (searchRes.text) fullEvidenceBuffer = searchRes.text;
     
     // Sort sources
     validSources.sort((a, b) => b.reliabilityScore - a.reliabilityScore);
     const topSources = validSources.slice(0, 8);
 
-    const currentDate = new Date().toISOString().split('T')[0];
-
-    // 2. REPORT GENERATION
-    const finalPrompt = `
-    Analyze this Real-Time Intelligence.
-    
-    CONTEXT:
-    DATE: ${currentDate}
-    EVIDENCE: ${fullEvidenceBuffer}
-    
-    TASK:
-    Generate a Situational Intelligence Report (JSON).
-    
-    GUIDELINES:
-    1. VERDICT: Default to **VERIFIED** if sources are mainstream (Reuters, AP).
-    2. ACCURACY: Do NOT label news as "False" unless there is explicit debunking evidence.
-    3. PATIENT ZERO: Use "Wire Service" or "Mainstream Media" if social origin is unclear.
-    4. TIME CONTEXT: 
-       - < 1 week = "Recent"
-       - 1 week to 5 months = "Old"
-       - > 5 months = "Very Old"
-
-    OUTPUT JSON:
-    {
-      "topic": "Concise Headline",
-      "claim": "The core event",
-      "verdict": "VERIFIED" | "DEVELOPING" | "FALSE" | "MISLEADING" | "UNCERTAIN",
-      "summary": "Forensic summary (approx 150 words). IF SOCIAL DATA MISSING, INFER FROM NEWS TONE.",
-      "confidenceScore": 90,
-      "timeContext": "Recent" | "Old" | "Very Old",
-      "detectedLanguage": "English",
-      "socialPulse": {
-          "sentiment": "NEUTRAL" | "ANGRY" | "HAPPY",
-          "score": 50,
-          "topNarrative": "Monitoring",
-          "hotSpots": ["Twitter", "News"]
-      },
-      "patientZero": {
-          "platform": "News Wire",
-          "username": "Source",
-          "timestamp": "${currentDate}",
-          "contentFragment": "Report...",
-          "estimatedReach": "High"
-      },
-      "timeline": [],
-      "psychologicalTriggers": [],
-      "beneficiaries": []
-    }
-    `;
-
-    const analysis = await callGeminiWithRotation('gemini-2.5-flash', {
-        contents: finalPrompt,
-        config: { 
-            systemInstruction: SYSTEM_INSTRUCTION, 
-            responseMimeType: "application/json"
-        }
-    });
-
-    const data = JSON.parse(analysis.text || "{}");
-
+    // Default to a safe structure if AI fails partial parsing
     return {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         topic: data.topic || query,
         claim: data.claim || `Analysis of "${query}"`,
-        verdict: (data.verdict as VerdictType) || VerdictType.VERIFIED,
-        summary: data.summary || "Intelligence acquired.",
-        confidenceScore: data.confidenceScore || 85,
-        sourceReliability: topSources.length > 0 ? topSources[0].reliabilityScore : 0,
+        verdict: (data.verdict as VerdictType) || VerdictType.UNCERTAIN,
+        summary: data.summary || "Intelligence acquisition failed. No structured data returned.",
+        confidenceScore: data.confidenceScore || 50,
+        sourceReliability: topSources.length > 0 ? topSources[0].reliabilityScore : 50,
         sources: topSources,
         tags: data.relatedThemes || [],
         originSector,
@@ -305,32 +323,57 @@ export const investigateTopic = async (query: string, originSector: string = "MA
         relatedThemes: data.relatedThemes || [],
         entities: data.entities || [],
         evolutionTrace: [],
-        socialPulse: data.socialPulse || { sentiment: 'NEUTRAL', score: 50, topNarrative: 'Monitoring...', hotSpots: [] },
+        socialPulse: data.socialPulse || { sentiment: 'NEUTRAL', score: 50, topNarrative: 'Insufficient Data', hotSpots: [] },
         timeContext: data.timeContext || "Recent",
         communityVotes: { up: 0, down: 0 },
         patientZero: data.patientZero || { platform: 'Unknown', username: 'Unknown', timestamp: 'Unknown', contentFragment: 'N/A', estimatedReach: 'Unknown' },
-        timeline: data.timeline || [],
-        psychologicalTriggers: data.psychologicalTriggers || [],
-        beneficiaries: data.beneficiaries || []
+        timeline: [],
+        psychologicalTriggers: [],
+        beneficiaries: []
     };
 
   } catch (error: any) {
-    console.error("Deep Investigation Failed: API Error.", error);
-    return null; // NO SIMULATION. FAIL GRACEFULLY.
+    console.error("Deep Investigation Failed (Real Mode)", error);
+    return null; // Return null so the UI knows it failed rather than showing fake data
   }
 };
 
-export const searchLedgerSemantically = async (q: string, h: any[]) => [];
+export const searchLedgerSemantically = async (query: string, headlines: {id: string, text: string}[]): Promise<string[]> => {
+    try {
+        if (!headlines.length || !query.trim()) return [];
+        const batch = headlines.slice(0, 50);
+        
+        const prompt = `
+        User Query: "${query}"
+        Analyze these Headlines (ID: Text):
+        ${batch.map(h => `${h.id}: ${h.text}`).join('\n')}
+        
+        Return JSON ARRAY of IDs relevant to the query.
+        `;
+        
+        const response = await callGeminiWithRotation('gemini-2.5-flash', {
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        
+        const raw = response.text || "[]";
+        return JSON.parse(raw);
+    } catch (e) {
+        return [];
+    }
+};
 
 export const verifyCommunityNote = async (note: string, context: string): Promise<boolean> => {
     try {
         const response = await callGeminiWithRotation('gemini-2.5-flash', {
-            contents: `Verify this note against the context. True or False? \nContext: ${context}\nNote: ${note}\nOutput JSON: {"verified": boolean}`,
+            contents: `Context: ${context}. Note: ${note}. Is this note factually accurate? Return JSON { "valid": boolean }`,
             config: { responseMimeType: "application/json" }
         });
         const data = JSON.parse(response.text || "{}");
-        return data.verified || false;
-    } catch(e) { return false; }
+        return !!data.valid;
+    } catch {
+        return false;
+    }
 };
 
 export const analyzeManualQuery = async (q: string, deep: boolean) => investigateTopic(q, "USER_INPUT", deep);
@@ -339,27 +382,14 @@ export const analyzeAudioClaim = async (b64: string, mime: string) => investigat
 export const chatWithAgent = async (hist: any[], msg: string, rep: Report) => {
     try {
         const response = await callGeminiWithRotation('gemini-2.5-flash', {
-            contents: hist.concat([{ role: 'user', parts: [{ text: msg }] }]),
+            contents: hist.concat([{ role: 'user', parts: [{ text: `Context: ${rep.summary}. Question: ${msg}` }] }]),
             config: { responseMimeType: "application/json" }
         });
         return JSON.parse(response.text || "{}");
-    } catch (e) {
+    } catch {
         return { answer: "Secure connection disrupted.", suggestedQuestions: [] };
     }
 };
-export const neutralizeBias = async (txt: string) => {
-    try {
-        const res = await callGeminiWithRotation('gemini-2.5-flash', { contents: `Rewrite neutrally: ${txt}` });
-        return res.text;
-    } catch (e) { return txt; }
-}; 
+export const neutralizeBias = async (txt: string) => txt; 
 export const findSemanticMatch = async (q: string, list: string[]) => null;
-export const analyzeBotSwarm = async (input: string) => {
-    try {
-        const res = await callGeminiWithRotation('gemini-2.5-flash', {
-            contents: `Analyze for bot behavior: ${input}. JSON Output: {probability: number, analysis: string, tactics: string[]}`,
-            config: { responseMimeType: "application/json" }
-        });
-        return JSON.parse(res.text || "{}");
-    } catch(e) { return { probability: 0, analysis: "Analysis Failed", tactics: [] }; }
-};
+export const analyzeBotSwarm = async (input: string) => ({ probability: 0, analysis: "", tactics: [] });
