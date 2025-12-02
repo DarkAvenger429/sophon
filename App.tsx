@@ -331,6 +331,20 @@ export default function App() {
                 
                 <div className="flex items-center gap-2">
                     <button
+                        onClick={() => setShowConnectModal(true)}
+                        className={`px-3 py-2 rounded font-mono text-xs font-bold transition-all border flex items-center gap-2 ${
+                            highContrast 
+                            ? 'bg-white text-black border-black hover:bg-gray-100' 
+                            : 'bg-green-500/10 border-green-500 text-green-500 hover:bg-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.2)]'
+                        }`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        WHATSAPP
+                    </button>
+
+                    <button
                     onClick={() => setIsAutoScanning(!isAutoScanning)}
                     className={`px-4 py-2 rounded font-mono text-xs font-bold transition-all border ${
                         isAutoScanning 
