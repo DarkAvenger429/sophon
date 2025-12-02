@@ -1,10 +1,13 @@
-
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
-// --- API KEY POOL ---
+// --- DEDICATED NEWS WIRE KEY (Isolated Lane) ---
+// Using a specific key for the News Feed ensures the heavy scanning logic 
+// doesn't exhaust the quota for the dashboard's initial load.
+const NEWS_WIRE_KEY = 'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao'; 
+
+// --- SCANNER API KEY POOL (Heavy Logic Lane) ---
 const API_KEY_POOL = [
-    'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
     'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
     'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4',
     'AIzaSyATaHMWhes05hsETC3b9wtz5nYAvQYqFP8',
@@ -85,7 +88,7 @@ const getFromCache = (key: string, maxAgeHours: number = 24) => {
     }
 };
 
-// --- SMART KEY ROTATION & CALLER ---
+// --- SMART ROTATION & CALLER ---
 async function callGeminiWithRotation(modelName: string, params: any) {
     let lastError;
     
@@ -179,22 +182,26 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
 };
 
 export const fetchGlobalNews = async (): Promise<{headline: string, summary: string, source: string, time: string, url: string}[]> => {
+    // 1. Try Dedicated Key First (Isolation Lane)
     try {
+        const dedicatedAi = new GoogleGenAI({ apiKey: NEWS_WIRE_KEY });
         const prompt = `
-        Find 6 TOP GLOBAL NEWS headlines from the last 12 hours.
+        Find 6 TOP verified global news headlines from the last 12 hours.
+        Focus on Major Geopolitics, Finance, and Tech.
         Return strictly JSON.
         Format: [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}]
         `;
         
-        const response = await callGeminiWithRotation('gemini-2.5-flash', {
+        const response = await dedicatedAi.models.generateContent({
+            model: 'gemini-2.5-flash',
             contents: prompt,
             config: { 
                 tools: [{ googleSearch: {} }],
                 safetySettings: [
-                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
                 ]
             }
         });
@@ -212,10 +219,29 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
             saveToCache(CACHE_KEYS.NEWS, results);
             return results;
         }
-        throw new Error("Empty news results");
+        throw new Error("Empty dedicated response");
 
     } catch (e: any) {
-        console.warn("News Fetch Failed, attempting cache fallback:", e.message);
+        console.warn("Dedicated News Key Failed, falling back to Pool:", e.message);
+        
+        // 2. Fallback to Rotation Pool if Dedicated Key fails (Redundancy)
+        try {
+            const prompt = `Find 5 verified global news headlines. JSON Array format.`;
+            const response = await callGeminiWithRotation('gemini-2.5-flash', {
+                contents: prompt,
+                config: { tools: [{ googleSearch: {} }] }
+            });
+            const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
+            let results = JSON.parse(text);
+            if (Array.isArray(results) && results.length > 0) {
+                saveToCache(CACHE_KEYS.NEWS, results);
+                return results;
+            }
+        } catch (err) {
+            console.error("Pool Fallback Failed:", err);
+        }
+
+        // 3. Last Resort: Cache
         const cached = getFromCache(CACHE_KEYS.NEWS);
         if (cached) return cached;
         return [];
@@ -259,10 +285,10 @@ export const investigateTopic = async (query: string, originSector: string = "MA
             tools: [{ googleSearch: {} }],
             systemInstruction: SYSTEM_INSTRUCTION, 
             safetySettings: [
-                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE }
             ]
         }
     });
