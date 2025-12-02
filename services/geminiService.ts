@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
@@ -189,7 +190,7 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         Find 6 TOP verified global news headlines from the last 12 hours.
         Focus on Major Geopolitics, Finance, and Tech.
         Return strictly JSON.
-        Format: [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}]
+        Format: [{"headline": "...", "summary": "...", "source": "...", "time": "..."}]
         `;
         
         const response = await dedicatedAi.models.generateContent({
@@ -216,8 +217,15 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         }
 
         if (Array.isArray(results) && results.length > 0) {
-            saveToCache(CACHE_KEYS.NEWS, results);
-            return results;
+            // BULLETPROOF LINKING: Generate dynamic search links to ensure relevance
+            // This fixes the issue of the AI returning mismatched URLs or generic site links
+            const safeResults = results.map((r: any) => ({
+                ...r,
+                url: `https://news.google.com/search?q=${encodeURIComponent(r.headline + " " + r.source)}`
+            }));
+
+            saveToCache(CACHE_KEYS.NEWS, safeResults);
+            return safeResults;
         }
         throw new Error("Empty dedicated response");
 
@@ -226,16 +234,27 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         
         // 2. Fallback to Rotation Pool if Dedicated Key fails (Redundancy)
         try {
-            const prompt = `Find 5 verified global news headlines. JSON Array format.`;
+            const prompt = `Find 5 verified global news headlines. JSON Array format: [{"headline": "...", "summary": "...", "source": "...", "time": "..."}]`;
             const response = await callGeminiWithRotation('gemini-2.5-flash', {
                 contents: prompt,
                 config: { tools: [{ googleSearch: {} }] }
             });
             const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
-            let results = JSON.parse(text);
+            let results = [];
+            try {
+                results = JSON.parse(text);
+            } catch (err) {
+                const match = text.match(/\[.*\]/s);
+                if (match) results = JSON.parse(match[0]);
+            }
+
             if (Array.isArray(results) && results.length > 0) {
-                saveToCache(CACHE_KEYS.NEWS, results);
-                return results;
+                const safeResults = results.map((r: any) => ({
+                    ...r,
+                    url: `https://news.google.com/search?q=${encodeURIComponent(r.headline + " " + r.source)}`
+                }));
+                saveToCache(CACHE_KEYS.NEWS, safeResults);
+                return safeResults;
             }
         } catch (err) {
             console.error("Pool Fallback Failed:", err);
