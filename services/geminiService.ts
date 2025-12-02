@@ -3,11 +3,9 @@ import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
 // --- DEDICATED NEWS WIRE KEY (Isolated Lane) ---
-// Using a specific key for the News Feed ensures the heavy scanning logic 
-// doesn't exhaust the quota for the dashboard's initial load.
 const NEWS_WIRE_KEY = 'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao'; 
 
-// --- SCANNER API KEY POOL (Heavy Logic Lane) ---
+// --- SCANNER API KEY POOL ---
 const API_KEY_POOL = [
     'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
     'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4',
@@ -116,17 +114,23 @@ async function callGeminiWithRotation(modelName: string, params: any) {
                 });
             } catch (error: any) {
                 lastError = error;
-                const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
+                const status = error.status || error.code;
+                const msg = error.message || "";
+
+                if (status === 403 || msg.includes('leaked')) {
+                    console.error("⛔ KEY LEAKED/REVOKED. Rotating immediately.");
+                    break; // Skip to next key immediately
+                }
+
+                const isQuota = status === 429 || status === 503;
                 
                 if (isQuota) {
                     if (isLastKey && attempt < maxRetries - 1) {
-                        // Wait if it's our last hope
                         const delay = 2000; 
                         console.warn(`⚠️ Quota Hit on Last Key. Waiting ${delay}ms...`);
                         await sleep(delay);
                         continue; 
                     } else {
-                        // Rotate to next key immediately
                         break; 
                     }
                 }
@@ -153,12 +157,10 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     const response = await callGeminiWithRotation('gemini-2.5-flash', {
       contents: prompt,
       config: { 
-          tools: [{ googleSearch: {} }],
-          // responseMimeType REMOVED to avoid 400 error with tools
+          tools: [{ googleSearch: {} }]
       }
     });
     
-    // Manually parse JSON since we removed responseMimeType
     const text = response.text?.replace(/```json|```/g, '').trim() || "[]";
     let results = [];
     try {
@@ -169,7 +171,7 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     }
 
     if (Array.isArray(results) && results.length > 0) {
-        saveToCache(CACHE_KEYS.TOPICS, results); // Cache successful result
+        saveToCache(CACHE_KEYS.TOPICS, results); 
         return results;
     }
     throw new Error("Empty scan results");
@@ -178,7 +180,7 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     console.warn("Scan Failed, attempting cache fallback:", error.message);
     const cached = getFromCache(CACHE_KEYS.TOPICS);
     if (cached) return cached;
-    return []; // Return empty only if both API and Cache fail
+    return []; 
   }
 };
 
@@ -217,8 +219,6 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         }
 
         if (Array.isArray(results) && results.length > 0) {
-            // BULLETPROOF LINKING: Generate dynamic search links to ensure relevance
-            // This fixes the issue of the AI returning mismatched URLs or generic site links
             const safeResults = results.map((r: any) => ({
                 ...r,
                 url: `https://news.google.com/search?q=${encodeURIComponent(r.headline + " " + r.source)}`
@@ -269,7 +269,6 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
 
 export const investigateTopic = async (query: string, originSector: string = "MANUAL_INPUT", useDeepScan: boolean = false): Promise<Report | null> => {
   try {
-    // UNIFIED SEARCH VECTOR (Efficient)
     const vectorPrompt = `
     Conduct a forensic investigation on: "${query}"
     
@@ -317,7 +316,6 @@ export const investigateTopic = async (query: string, originSector: string = "MA
     try {
         data = JSON.parse(text);
     } catch (e) {
-        // Simple brace finding if parse fails
         const firstBrace = text.indexOf('{');
         const lastBrace = text.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace !== -1) {
@@ -327,7 +325,6 @@ export const investigateTopic = async (query: string, originSector: string = "MA
         }
     }
 
-    // Harvest sources from grounding metadata
     let validSources: Source[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     chunks.forEach((chunk: any) => {
@@ -346,11 +343,9 @@ export const investigateTopic = async (query: string, originSector: string = "MA
         }
     });
     
-    // Sort sources
     validSources.sort((a, b) => b.reliabilityScore - a.reliabilityScore);
     const topSources = validSources.slice(0, 8);
 
-    // Default to a safe structure if AI fails partial parsing
     return {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
@@ -379,7 +374,7 @@ export const investigateTopic = async (query: string, originSector: string = "MA
 
   } catch (error: any) {
     console.error("Deep Investigation Failed (Real Mode)", error);
-    return null; // Return null so the UI knows it failed rather than showing fake data
+    return null; 
   }
 };
 
