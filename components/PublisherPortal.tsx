@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { connectWallet, signHeadline, WalletState } from '../services/web3Service';
-import { searchLedgerSemantically } from '../services/geminiService';
+import { searchLedgerSemantically, fetchGlobalNews } from '../services/geminiService';
 
 interface PublisherPortalProps {
   highContrast?: boolean;
@@ -160,9 +160,13 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
       category: 'OSINT' as BlockData['category'],
       urgency: 'LOW' as BlockData['urgency']
   });
-  const [publishStatus, setPublishStatus] = useState<'IDLE' | 'MINING' | 'CONFIRMED'>('IDLE');
+  const [publishStatus, setPublishStatus] = useState<'IDLE' | 'MINING' | 'CONFIRMED' | 'BATCHING'>('IDLE');
   const [miningLogs, setMiningLogs] = useState<string[]>([]);
   const [currentBlock, setCurrentBlock] = useState<Block | null>(null);
+
+  // Wire Ingest State
+  const [wireNews, setWireNews] = useState<any[]>([]);
+  const [loadingWire, setLoadingWire] = useState(false);
 
   // Explorer State
   const [filter, setFilter] = useState('');
@@ -213,6 +217,63 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
 
   const addMiningLog = (msg: string) => setMiningLogs(prev => [...prev, `> ${new Date().toLocaleTimeString()} ${msg}`]);
 
+  const fetchWire = async () => {
+      setLoadingWire(true);
+      try {
+          const news = await fetchGlobalNews();
+          setWireNews(news);
+      } catch (e) {
+          console.error(e);
+      }
+      setLoadingWire(false);
+  };
+
+  const ingestWireItem = (item: any) => {
+      setFormData({
+          headline: `${item.headline} (${item.source})`,
+          category: 'OFFICIAL',
+          urgency: 'HIGH'
+      });
+  };
+
+  // GENERIC PUBLISH FUNCTION (Used by Single and Batch)
+  const publishToChain = async (headline: string, category: string, urgency: string): Promise<Block | null> => {
+      try {
+          // 1. Sign
+          addMiningLog(`Signing: "${headline.slice(0,20)}..."`);
+          const signedData = await signHeadline(headline);
+          if (!signedData) throw new Error("Signature Rejected");
+          
+          // 2. Mining Delay (Shortened for batch)
+          await new Promise(r => setTimeout(r, 400));
+          
+          // 3. Create Block
+          // Note: In a real app, this state update needs to be atomic or use functional updates better for batching
+          // For simulation, we calculate height based on current ledger length dynamically in the state setter or pass it in
+          
+          const newBlock: Block = {
+              height: 0, // Will be set during state update
+              hash: signedData.hash,
+              prevHash: "0x00...",
+              timestamp: Date.now(),
+              miner: wallet.address || "Unknown",
+              gasUsed: 21000 + Math.floor(Math.random() * 5000),
+              nonce: Math.floor(Math.random() * 1000000),
+              data: {
+                  headline: headline,
+                  category: category as any,
+                  urgency: urgency as any,
+                  factHash: signedData.hash,
+                  signature: signedData.signature
+              }
+          };
+          return newBlock;
+      } catch (e) {
+          addMiningLog(`ERROR: ${e}`);
+          return null;
+      }
+  };
+
   const handlePublish = async () => {
       if (!wallet.isConnected || !formData.headline) return;
       
@@ -220,48 +281,51 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
       setMiningLogs([]);
       addMiningLog("Initiating Smart Contract [0xSOPHON...]");
       
-      try {
-          // 1. Sign
-          addMiningLog("Requesting Signature...");
-          const signedData = await signHeadline(formData.headline);
-          if (!signedData) throw new Error("Signature Rejected");
-          addMiningLog(`Signature Acquired: ${signedData.signature.slice(0, 10)}...`);
-
-          // 2. Simulate Mining Delay
-          await new Promise(r => setTimeout(r, 800));
-          addMiningLog("Hashing Block Content...");
-          await new Promise(r => setTimeout(r, 800));
-          addMiningLog("Broadcasting to Mempool...");
-          await new Promise(r => setTimeout(r, 1200));
-          addMiningLog("Block Confirmed.");
-
-          // 3. Create Block
-          const newBlock: Block = {
-              height: ledger.length > 0 ? ledger[0].height + 1 : 18420001,
-              hash: signedData.hash,
-              prevHash: ledger.length > 0 ? ledger[0].hash : "0x0000000000000000000000000000000000000000",
-              timestamp: Date.now(),
-              miner: wallet.address || "Unknown",
-              gasUsed: 21000 + Math.floor(Math.random() * 5000),
-              nonce: Math.floor(Math.random() * 1000000),
-              data: {
-                  headline: formData.headline,
-                  category: formData.category,
-                  urgency: formData.urgency,
-                  factHash: signedData.hash, // Using tx hash as fact hash for demo
-                  signature: signedData.signature
-              }
-          };
-
-          setLedger(prev => [newBlock, ...prev]);
+      const newBlock = await publishToChain(formData.headline, formData.category, formData.urgency);
+      
+      if (newBlock) {
+          setLedger(prev => {
+              newBlock.height = prev.length > 0 ? prev[0].height + 1 : 18420001;
+              newBlock.prevHash = prev.length > 0 ? prev[0].hash : "0xGENESIS";
+              return [newBlock, ...prev];
+          });
           setCurrentBlock(newBlock);
+          addMiningLog("Block Confirmed.");
           setPublishStatus('CONFIRMED');
           setFormData({ headline: '', category: 'OSINT', urgency: 'LOW' });
-
-      } catch (e) {
-          addMiningLog(`ERROR: ${e}`);
+      } else {
           setPublishStatus('IDLE');
       }
+  };
+
+  const handleBatchPublish = async () => {
+      if (!wallet.isConnected || wireNews.length === 0) return;
+      
+      setPublishStatus('BATCHING');
+      setMiningLogs([]);
+      addMiningLog(`Initiating Batch Protocol for ${wireNews.length} items...`);
+      
+      let successCount = 0;
+
+      for (const news of wireNews) {
+          addMiningLog(`Processing Node: ${news.source}`);
+          const block = await publishToChain(`${news.headline} (${news.source})`, 'OFFICIAL', 'HIGH');
+          
+          if (block) {
+              setLedger(prev => {
+                  block.height = prev.length > 0 ? prev[0].height + 1 : 18420001;
+                  block.prevHash = prev.length > 0 ? prev[0].hash : "0xGENESIS";
+                  return [block, ...prev];
+              });
+              successCount++;
+              addMiningLog(`>> Block #${block.height} Mined.`);
+          }
+          // Small delay to prevent UI freeze
+          await new Promise(r => setTimeout(r, 200));
+      }
+      
+      addMiningLog(`BATCH COMPLETE. ${successCount}/${wireNews.length} Blocks Verified.`);
+      setPublishStatus('IDLE');
   };
 
   // Auth Screen
@@ -334,7 +398,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
                                     onChange={(e) => setFormData({...formData, headline: e.target.value})} 
                                     placeholder="> Enter verified intelligence data..." 
                                     className={`w-full h-32 p-4 rounded font-mono text-sm focus:outline-none border ${highContrast ? 'bg-gray-100 border-black' : 'bg-gray-900 border-gray-600 text-white focus:border-sophon-accent'}`}
-                                    disabled={!wallet.isConnected || publishStatus === 'MINING'}
+                                    disabled={!wallet.isConnected || publishStatus === 'MINING' || publishStatus === 'BATCHING'}
                                 />
                             </div>
                             
@@ -345,7 +409,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
                                         value={formData.category}
                                         onChange={(e) => setFormData({...formData, category: e.target.value as any})}
                                         className={`w-full p-2 rounded text-xs border ${highContrast ? 'bg-white border-black' : 'bg-gray-900 border-gray-600 text-white'}`}
-                                        disabled={publishStatus === 'MINING'}
+                                        disabled={publishStatus === 'MINING' || publishStatus === 'BATCHING'}
                                     >
                                         <option value="OSINT">OSINT ANALYSIS</option>
                                         <option value="LEAK">VERIFIED LEAK</option>
@@ -359,7 +423,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
                                         value={formData.urgency}
                                         onChange={(e) => setFormData({...formData, urgency: e.target.value as any})}
                                         className={`w-full p-2 rounded text-xs border ${highContrast ? 'bg-white border-black' : 'bg-gray-900 border-gray-600 text-white'}`}
-                                        disabled={publishStatus === 'MINING'}
+                                        disabled={publishStatus === 'MINING' || publishStatus === 'BATCHING'}
                                     >
                                         <option value="LOW">LOW PRIORITY</option>
                                         <option value="MED">MEDIUM PRIORITY</option>
@@ -367,18 +431,41 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
                                     </select>
                                 </div>
                             </div>
+
+                            {/* TIER-1 INGEST BUTTON */}
+                            <div className="mt-4 p-3 border border-gray-800 rounded bg-black/20">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-[9px] font-bold text-gray-500">TIER-1 WIRE INGEST</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={fetchWire} disabled={loadingWire || publishStatus === 'BATCHING'} className="text-[9px] text-sophon-accent hover:underline">{loadingWire ? 'SYNCING...' : 'REFRESH'}</button>
+                                        {wireNews.length > 0 && wallet.isConnected && (
+                                            <button onClick={handleBatchPublish} disabled={publishStatus === 'BATCHING'} className="text-[9px] bg-purple-500/20 text-purple-400 px-2 rounded hover:bg-purple-500/40 border border-purple-500/50">
+                                                {publishStatus === 'BATCHING' ? 'BATCHING...' : 'BATCH SYNC ALL'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="max-h-24 overflow-y-auto space-y-1">
+                                    {wireNews.map((news, i) => (
+                                        <div key={i} onClick={() => ingestWireItem(news)} className="text-[9px] truncate cursor-pointer hover:text-white text-gray-400 p-1 hover:bg-white/5 rounded">
+                                            + {news.headline}
+                                        </div>
+                                    ))}
+                                    {wireNews.length === 0 && !loadingWire && <div className="text-[9px] text-gray-600 italic">No wire data available</div>}
+                                </div>
+                            </div>
                         </div>
 
                         <div className="mt-6 pt-6 border-t border-gray-800">
                              <button 
                                 onClick={handlePublish}
-                                disabled={!wallet.isConnected || !formData.headline || publishStatus === 'MINING'}
+                                disabled={!wallet.isConnected || !formData.headline || publishStatus === 'MINING' || publishStatus === 'BATCHING'}
                                 className={`w-full py-4 rounded font-bold font-mono text-xs tracking-widest border transition-all ${
                                     highContrast ? 'bg-black text-white border-black disabled:opacity-50' 
                                     : 'bg-sophon-accent text-black border-sophon-accent hover:bg-white hover:shadow-[0_0_20px_rgba(0,240,255,0.4)] disabled:opacity-50 disabled:bg-gray-800 disabled:border-gray-800 disabled:text-gray-500'
                                 }`}
                             >
-                                {publishStatus === 'MINING' ? 'MINING BLOCK...' : 'SIGN & BROADCAST'}
+                                {publishStatus === 'MINING' ? 'MINING BLOCK...' : publishStatus === 'BATCHING' ? 'BATCH PROCESSING...' : 'SIGN & BROADCAST'}
                             </button>
                         </div>
                     </div>
@@ -393,7 +480,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
                         <div className={`flex-1 rounded p-4 font-mono text-[10px] overflow-y-auto mb-4 ${highContrast ? 'bg-white border border-black text-black' : 'bg-black border border-gray-800 text-green-500'}`}>
                             {miningLogs.length === 0 && <span className="opacity-50">&gt; System Ready. Awaiting Input...</span>}
                             {miningLogs.map((log, i) => <div key={i}>{log}</div>)}
-                            {publishStatus === 'MINING' && <div className="animate-pulse">&gt; Processing...</div>}
+                            {(publishStatus === 'MINING' || publishStatus === 'BATCHING') && <div className="animate-pulse">&gt; Processing...</div>}
                         </div>
 
                         {/* CONFIRMED BLOCK VISUAL */}

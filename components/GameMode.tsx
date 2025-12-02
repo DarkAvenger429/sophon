@@ -17,222 +17,57 @@ const QUESTION_POOL: Question[] = [
   {
     id: 1,
     category: 'AI_DETECTION',
-    question: "When analyzing an image of a crowd for AI generation, what is the most common giveaway?",
+    question: "SCENARIO: You are analyzing a viral photo of a massive protest in Paris. The central figure is holding a sign with perfect French text. However, when you zoom into the background crowd, the faces of the people appear 'melted' or lack defined eyes, and a police van in the distance has 6 wheels on one side.",
     options: [
-      { text: "The lighting is too dark.", isCorrect: false, feedback: "Dark lighting is a stylistic choice in photography, not an AI artifact." },
-      { text: "Faces in the background are blurred or distorted (melted).", isCorrect: true, feedback: "CORRECT. AI models optimize for the focal point. Background faces often lack coherent geometry, appearing melted or alien-like." },
-      { text: "The resolution is 4K.", isCorrect: false, feedback: "High resolution is standard for modern cameras and AI upscalers alike." }
+      { text: "It's a low-resolution camera artifact.", isCorrect: false, feedback: "While compression can blur details, it doesn't add structural impossibilities like extra wheels or melted facial geometry." },
+      { text: "It is an AI Generation (Incoherence Artifacts).", isCorrect: true, feedback: "CORRECT. AI models (like Midjourney or Flux) focus their computing power on the focal point (the main protester). They often 'hallucinate' background details, resulting in nightmarish, melted faces and structurally impossible vehicles. This is known as 'Semantic Incoherence'—the AI knows what a crowd looks like generally, but fails at the biological specifics of individual background characters." },
+      { text: "It's a composite photoshop.", isCorrect: false, feedback: "Photoshop usually retains the integrity of the original source images used in the composite." }
     ],
-    protocol: "ZOOM IN ON BACKGROUND FACES"
+    protocol: "FORENSIC PROTOCOL: ALWAYS ZOOM INTO THE PERIPHERY."
   },
   {
     id: 2,
-    category: 'AI_DETECTION',
-    question: "You see a photo of a politician holding a sign. The text looks like alien symbols. What is this?",
+    category: 'MISINFO_TACTICS',
+    question: "SCENARIO: A tweet claims 'The Government just quietly passed a law to ban private car ownership by 2030!' The tweet includes a screenshot of a document header but provides no link to the bill. The user's bio says 'Truth Seeker | Anti-NWO'. The post has 50,000 retweets but verified journalists in the comments are asking for a source and getting blocked.",
     options: [
-      { text: "A foreign dialect.", isCorrect: false, feedback: "Even foreign scripts have consistent structure. This is structural incoherence." },
-      { text: "AI Text Hallucination.", isCorrect: true, feedback: "CORRECT. AI generates image pixels based on probability, not linguistic rules. It mimics the 'shape' of text without understanding spelling." },
-      { text: "Motion blur.", isCorrect: false, feedback: "Motion blur causes direction-specific smearing, not character substitution." }
+      { text: "It's a leak the media is suppressing.", isCorrect: false, feedback: "This is the 'Secret Knowledge' trap used to flatter the reader." },
+      { text: "It is a 'Rage Bait' Engagement Trap.", isCorrect: true, feedback: "CORRECT. This tactic relies on high-arousal emotions (anger, fear) to bypass critical thinking. By providing a screenshot (which cannot be clicked or text-searched easily) instead of a link, the bad actor prevents easy verification. Blocking journalists is a tactic to maintain the 'echo chamber' and prevent the debunking from being seen by the followers." },
+      { text: "It's true because it has 50k retweets.", isCorrect: false, feedback: "Engagement measures virality, not veracity. Bot networks can easily inflate these numbers." }
     ],
-    protocol: "READ BACKGROUND TEXT & LOGOS"
+    protocol: "DEFENSE PROTOCOL: NO LINK = NO TRUST. IGNORE SCREENSHOTS OF TEXT."
   },
   {
     id: 3,
     category: 'AI_DETECTION',
-    question: "Which feature is a classic 'tell' of AI-generated hands?",
+    question: "SCENARIO: You receive a voicemail from your 'CEO'. The voice sounds exactly like him, using his typical jargon. He says: 'I'm in a meeting, I need you to wire $4,500 to this vendor immediately for the conference. Don't call me back, just handle it.' The audio is crystal clear with zero background noise.",
     options: [
-      { text: "Hands in pockets.", isCorrect: false, feedback: "Hiding hands is a common photography pose." },
-      { text: "Polydactyly (too many fingers) or merging digits.", isCorrect: true, feedback: "CORRECT. AI struggles with the complex topology of overlapping fingers, often generating 6+ fingers or merging them into objects." },
-      { text: "Painted fingernails.", isCorrect: false, feedback: "Nail polish is not an anomaly." }
+      { text: "He is likely in a soundproof booth.", isCorrect: false, feedback: "Unlikely for a busy CEO 'in a meeting'." },
+      { text: "It is an AI Voice Clone (Vishing Attack).", isCorrect: true, feedback: "CORRECT. This is 'Spectral Flatness'. Real phone calls have background hiss, room tone, and mic popping. AI-generated audio is often mathematically perfect and devoid of this 'noise floor'. Furthermore, the command 'Don't call me back' is a social engineering pressure tactic to prevent you from verifying the request via a secondary channel (Multi-Factor Authentication)." },
+      { text: "He is whispering to be discreet.", isCorrect: false, feedback: "Whispering changes vocal cord vibration patterns which AI often fails to mimic correctly." }
     ],
-    protocol: "COUNT THE FINGERS"
+    protocol: "DEFENSE PROTOCOL: VERIFY VIA SECONDARY CHANNEL (TEXT/SLACK)."
   },
   {
     id: 4,
-    category: 'MISINFO_TACTICS',
-    question: "What is 'Lateral Reading'?",
+    category: 'SOURCE_VERIFICATION',
+    question: "SCENARIO: You find a news site 'DenverGuardian.com' reporting a shocking crime. The site looks professional, has a weather widget, and a stock ticker. However, when you click on the 'Staff' page, the photos look generic, and a 'Whois' lookup reveals the domain was registered 3 days ago.",
     options: [
-      { text: "Reading a website top-to-bottom.", isCorrect: false, feedback: "That is vertical reading, which keeps you trapped in the site's own ecosystem." },
-      { text: "Opening new tabs to verify the source before reading.", isCorrect: true, feedback: "CORRECT. Fact-checkers leave the site immediately to see what trusted sources say *about* the site." },
-      { text: "Reading comments first.", isCorrect: false, feedback: "Comments are often manipulated by bot swarms." }
+      { text: "It's a new local startup.", isCorrect: false, feedback: "Legitimate news startups usually have verifiable journalists with digital footprints." },
+      { text: "It is a 'Pink Slime' or Typosquatting site.", isCorrect: true, feedback: "CORRECT. 'Pink Slime' journalism refers to low-quality, automated sites designed to look like local news to gain unearned trust. A domain registered days ago reporting on major political events is a massive red flag. They often use generic templates (weather/stocks) to mimic the aesthetic of authority without doing any actual reporting." },
+      { text: "It's an archived mirror.", isCorrect: false, feedback: "Archives identify themselves clearly." }
     ],
-    protocol: "LEAVE THE PAGE TO VERIFY THE PAGE"
+    protocol: "DEFENSE PROTOCOL: CHECK DOMAIN AGE ON WHOIS.COM."
   },
   {
     id: 5,
-    category: 'MISINFO_TACTICS',
-    question: "A headline uses words like 'SHOCKING', 'DESTROYED', and 'YOU WON'T BELIEVE'. This is:",
-    options: [
-      { text: "Breaking Journalism.", isCorrect: false, feedback: "Real journalism prioritizes clarity and neutrality over emotional triggers." },
-      { text: "Emotional/Rage Bait.", isCorrect: true, feedback: "CORRECT. High-arousal emotions (anger, shock) bypass critical thinking centers in the brain to force a click." },
-      { text: "Satire.", isCorrect: false, feedback: "Satire relies on irony, not emotional manipulation." }
-    ],
-    protocol: "IDENTIFY EMOTIONAL MANIPULATION"
-  },
-  {
-    id: 6,
-    category: 'AI_DETECTION',
-    question: "In AI portraits, how does skin texture typically appear?",
-    options: [
-      { text: "Overly smooth, plastic, or 'airbrushed'.", isCorrect: true, feedback: "CORRECT. AI models often denoise skin to the point of removing natural pores, creating a 'waxy' or plastic doll appearance." },
-      { text: "Too grainy.", isCorrect: false, feedback: "Grain suggests a high ISO setting on a real camera sensor." },
-      { text: "Red and blotchy.", isCorrect: false, feedback: "Imperfections usually indicate reality." }
-    ],
-    protocol: "LOOK FOR PORES & IMPERFECTIONS"
-  },
-  {
-    id: 7,
     category: 'LOGIC_CHECK',
-    question: "An image shows a reflection in a mirror, but the reflection doesn't match the object. Why?",
+    question: "SCENARIO: A video shows a politician giving a speech. The lips match the audio perfectly. However, you notice that every time they blink, their eyelids seem to 'glitch' or become transparent for a microsecond. Also, the shadow under their chin doesn't move when they turn their head.",
     options: [
-      { text: "Vampire physics.", isCorrect: false, feedback: "Incorrect." },
-      { text: "AI Physics Failure.", isCorrect: true, feedback: "CORRECT. AI does not understand light transport physics. It paints the reflection as a separate object, often forgetting to reverse text or match details." },
-      { text: "Wide-angle lens.", isCorrect: false, feedback: "Lenses distort geometry but do not alter the content of a reflection." }
+      { text: "Video compression error.", isCorrect: false, feedback: "Compression causes blockiness, not specific anatomical transparency." },
+      { text: "Deepfake / Neural Rendering Artifacts.", isCorrect: true, feedback: "CORRECT. Deepfake models often struggle with 'Temporal Consistency'—keeping the physics of light and shadow consistent over time. While they can sync lips (wav2lip), they often fail to render the complex occlusion of eyelids blinking or the accurate projection of shadows (Ray Tracing) as the head moves in 3D space." },
+      { text: "Bad lighting setup.", isCorrect: false, feedback: "Bad lighting creates harsh shadows, it doesn't detach them from the object." }
     ],
-    protocol: "CHECK PHYSICS & REFLECTIONS"
-  },
-  {
-    id: 8,
-    category: 'MISINFO_TACTICS',
-    question: "50 comments on a post are identical word-for-word. This indicates:",
-    options: [
-      { text: "A viral trend.", isCorrect: false, feedback: "Humans naturally vary their phrasing even when agreeing." },
-      { text: "Astroturfing / Bot Swarm.", isCorrect: true, feedback: "CORRECT. 'Astroturfing' is fake grassroots support. Scripts copy-paste exact text across thousands of bot accounts." },
-      { text: "Server glitch.", isCorrect: false, feedback: "Glitches usually duplicate a single user's post, not different users." }
-    ],
-    protocol: "SPOT THE SCRIPT"
-  },
-  {
-    id: 9,
-    category: 'SOURCE_VERIFICATION',
-    question: "Which domain extension is commonly associated with 'burner' disinformation sites?",
-    options: [
-      { text: ".gov", isCorrect: false, feedback: "Restricted to government entities." },
-      { text: ".xyz or .top", isCorrect: true, feedback: "CORRECT. These TLDs are extremely cheap ($1) and unrestricted, making them favorites for disposable fake news farms." },
-      { text: ".edu", isCorrect: false, feedback: "Restricted to accredited educational institutions." }
-    ],
-    protocol: "CHECK THE URL EXTENSION"
-  },
-  {
-    id: 10,
-    category: 'AI_DETECTION',
-    question: "In Deepfake audio, what is a common auditory flaw?",
-    options: [
-      { text: "Background noise.", isCorrect: false, feedback: "Real audio has noise. AI often sounds *too* clean." },
-      { text: "Unnatural breathing patterns.", isCorrect: true, feedback: "CORRECT. AI models generate continuous speech but often forget the natural intake of breath required for humans to speak long sentences." },
-      { text: "Low volume.", isCorrect: false, feedback: "Volume is easily adjusted and irrelevant to authenticity." }
-    ],
-    protocol: "LISTEN FOR THE BREATH"
-  },
-  {
-    id: 11,
-    category: 'MISINFO_TACTICS',
-    question: "What is a 'Cheapfake'?",
-    options: [
-      { text: "A free AI tool.", isCorrect: false, feedback: "Incorrect." },
-      { text: "Context-shifted media.", isCorrect: true, feedback: "CORRECT. Cheapfakes don't use AI. They use real photos/videos but re-caption them with a lie (e.g., sharing a 2015 photo as 'Breaking News')." },
-      { text: "A knockoff product.", isCorrect: false, feedback: "Irrelevant." }
-    ],
-    protocol: "VERIFY CONTEXT, NOT JUST PIXELS"
-  },
-  {
-    id: 12,
-    category: 'AI_DETECTION',
-    question: "Look at the accessories (glasses, jewelry) in a suspected AI portrait.",
-    options: [
-      { text: "Check for branding.", isCorrect: false, feedback: "Brands can be faked." },
-      { text: "Check for asymmetry and blending.", isCorrect: true, feedback: "CORRECT. AI often merges glasses frames into the skin or generates earrings with different shapes on each ear." },
-      { text: "Check for style.", isCorrect: false, feedback: "Style is subjective." }
-    ],
-    protocol: "CHECK SYMMETRY OF ACCESSORIES"
-  },
-  {
-    id: 13,
-    category: 'SOURCE_VERIFICATION',
-    question: "A viral screenshot of a tweet has no date and no handle visible. Verdict?",
-    options: [
-      { text: "Share if it feels true.", isCorrect: false, feedback: "Confirmation bias makes us vulnerable to this." },
-      { text: "Assume it is fake.", isCorrect: true, feedback: "CORRECT. Fabricating a tweet image takes seconds. If the link isn't provided, the tweet likely never existed." },
-      { text: "Ask a friend.", isCorrect: false, feedback: "Hearsay is not verification." }
-    ],
-    protocol: "NO LINK = NO TRUST"
-  },
-  {
-    id: 14,
-    category: 'MISINFO_TACTICS',
-    question: "What is the 'Illusion of Truth' effect?",
-    options: [
-      { text: "Repetition creates belief.", isCorrect: true, feedback: "CORRECT. The brain processes familiar information more easily. If you hear a lie 10 times, your brain flags it as 'true' simply because it is familiar." },
-      { text: "Truth is relative.", isCorrect: false, feedback: "Incorrect." },
-      { text: "AI cannot lie.", isCorrect: false, feedback: "AI frequently hallucinates." }
-    ],
-    protocol: "DISRUPT REPETITION"
-  },
-  {
-    id: 15,
-    category: 'AI_DETECTION',
-    question: "Which feature is AI currently BEST at rendering (hardest to spot)?",
-    options: [
-      { text: "Hands.", isCorrect: false, feedback: "Hands remain a high-failure point." },
-      { text: "Front-facing facial structure.", isCorrect: true, feedback: "CORRECT. GANs and Diffusion models have mastered facial symmetry. Never trust a face alone; look at the ears, hair, and background." },
-      { text: "Text.", isCorrect: false, feedback: "Text is often garbled." }
-    ],
-    protocol: "DON'T TRUST THE FACE ALONE"
-  },
-  {
-    id: 16,
-    category: 'MISINFO_TACTICS',
-    question: "A post says: 'Facebook is deleting this! Share before it's gone!'",
-    options: [
-      { text: "Helpful advice.", isCorrect: false, feedback: "Platforms remove content for Terms of Service violations, not conspiracies." },
-      { text: "False Urgency Loop.", isCorrect: true, feedback: "CORRECT. Scammers create artificial urgency to trigger your 'fear of missing out' (FOMO) and bypass fact-checking." },
-      { text: "Inside info.", isCorrect: false, feedback: "Unlikely." }
-    ],
-    protocol: "IGNORE 'SHARE NOW' COMMANDS"
-  },
-  {
-    id: 17,
-    category: 'LOGIC_CHECK',
-    question: "An image shows a person holding an object, but the fingers blend into the object. This is:",
-    options: [
-      { text: "Clipping / Merging.", isCorrect: true, feedback: "CORRECT. A primary AI artifact where the model fails to define the boundary between two interacting objects." },
-      { text: "Bad grip.", isCorrect: false, feedback: "Physics doesn't allow flesh to merge with matter." },
-      { text: "Motion blur.", isCorrect: false, feedback: "Incorrect." }
-    ],
-    protocol: "CHECK OBJECT INTERACTION"
-  },
-  {
-    id: 18,
-    category: 'SOURCE_VERIFICATION',
-    question: "Is a 'Verified' blue checkmark on X (Twitter) proof of identity?",
-    options: [
-      { text: "Yes, always.", isCorrect: false, feedback: "Legacy verification is gone." },
-      { text: "No, it is a paid subscription.", isCorrect: true, feedback: "CORRECT. A checkmark now simply means the user has a credit card and a phone number. It confers zero authority or expertise." },
-      { text: "Only for celebs.", isCorrect: false, feedback: "Incorrect." }
-    ],
-    protocol: "BLUE CHECK MEANS NOTHING"
-  },
-  {
-    id: 19,
-    category: 'AI_DETECTION',
-    question: "What is 'Zooming and Scrolling'?",
-    options: [
-      { text: "A dance move.", isCorrect: false, feedback: "No." },
-      { text: "A method to check AI consistency.", isCorrect: true, feedback: "CORRECT. AI images often look perfect at thumbnail size. You MUST zoom in to see the breakdown in logic (buttons, zippers, pupils)." },
-      { text: "Making the image bigger.", isCorrect: false, feedback: "It is about scrutiny, not size." }
-    ],
-    protocol: "ALWAYS ZOOM IN"
-  },
-  {
-    id: 20,
-    category: 'MISINFO_TACTICS',
-    question: "What is 'Prebunking'?",
-    options: [
-      { text: "Debunking later.", isCorrect: false, feedback: "That is reactive." },
-      { text: "Psychological inoculation.", isCorrect: true, feedback: "CORRECT. Learning the tactics of manipulation (like this quiz) builds 'mental armor', making you resistant to future misinformation." },
-      { text: "Guessing.", isCorrect: false, feedback: "Incorrect." }
-    ],
-    protocol: "BUILD MENTAL ARMOR"
+    protocol: "FORENSIC PROTOCOL: WATCH THE SHADOWS AND BLINKS."
   }
 ];
 
@@ -287,7 +122,7 @@ export const GameMode: React.FC<{ highContrast?: boolean, onXPEarned?: (amount: 
               <h2 className={`text-xl font-bold font-mono ${highContrast ? 'text-black' : 'text-white'}`}>DAILY COGNITIVE DRILL</h2>
               <p className={`text-xs mt-2 max-w-md ${highContrast ? 'text-gray-600' : 'text-gray-400'}`}>
                   Initiate forensic training sequence. 
-                  Identify AI artifacts, logic gaps, and manipulation tactics.
+                  Analyze complex scenarios for AI artifacts, logic gaps, and manipulation tactics.
               </p>
               <button 
                 onClick={() => setGameState('PLAYING')} 
@@ -331,7 +166,7 @@ export const GameMode: React.FC<{ highContrast?: boolean, onXPEarned?: (amount: 
             </span>
         </div>
 
-        <h3 className={`text-lg font-bold mb-8 leading-relaxed ${highContrast ? 'text-black' : 'text-white'}`}>
+        <h3 className={`text-sm md:text-base font-bold mb-8 leading-relaxed ${highContrast ? 'text-black' : 'text-white'}`}>
             {currentQ.question}
         </h3>
 
@@ -358,9 +193,11 @@ export const GameMode: React.FC<{ highContrast?: boolean, onXPEarned?: (amount: 
                 <div className={`text-4xl font-bold mb-4 ${feedback.correct ? 'text-green-500' : 'text-red-500'}`}>
                     {feedback.correct ? 'CORRECT' : 'INCORRECT'}
                 </div>
-                <p className={`text-sm mb-8 max-w-lg leading-relaxed ${highContrast ? 'text-black' : 'text-gray-200'}`}>
-                    {feedback.text}
-                </p>
+                <div className="max-h-[200px] overflow-y-auto mb-8 pr-2 custom-scrollbar">
+                    <p className={`text-sm max-w-lg leading-relaxed ${highContrast ? 'text-black' : 'text-gray-200'}`}>
+                        {feedback.text}
+                    </p>
+                </div>
                 <div className={`p-4 rounded border mb-8 ${highContrast ? 'bg-gray-100 border-black' : 'bg-sophon-accent/5 border-sophon-accent/30'}`}>
                     <p className="text-[10px] font-bold uppercase mb-1 text-gray-500">TACTICAL PROTOCOL</p>
                     <p className={`text-sm font-mono ${highContrast ? 'text-black' : 'text-sophon-accent'}`}>{currentQ.protocol}</p>

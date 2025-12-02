@@ -86,7 +86,7 @@ PROTOCOL:
    - If a claim comes from a VERIFIED official account (e.g. Blue Tick Instagram/Twitter of a Govt/Celeb), treat it as HIGHLY CREDIBLE unless debunked by Reuters/AP/AFP.
    - Do NOT mark official statements as "Misleading" unless you have proof.
 
-4. **FORMAT (STRICT & CONCISE - MAX 1000 CHARS):**
+4. **FORMAT (STRICT & CONCISE - MAX 1200 CHARS):**
    - Use this EXACT structure. No fluff.
 
    *[VERDICT_EMOJI] STATUS: [VERIFIED / FALSE / MISLEADING / VERY OLD NEWS / OLD NEWS / RECENT / BREAKING]*
@@ -94,13 +94,16 @@ PROTOCOL:
    *RISK:* [🔴 HIGH / 🟢 MED / 🟢 LOW]
    *CONFIDENCE:* [0-100]%
 
+   *TL;DR:*
+   (1 distinct sentence summarizing the core truth.)
+
    *INTEL:*
    (2-3 sentences max. Just the facts. Explain WHY it is True/False.)
 
-   *TL;DR:* (1 sentence summary)
-
    *SOURCES:*
-   (List 2 Tier-1 Sources Only e.g. BBC, Reuters, Gov)
+   1. [Source Name] - [Link if available]
+   2. [Source Name] - [Link if available]
+   (MUST include at least 2 distinct Tier-1 sources like Reuters, AP, BBC, CNN, Al Jazeera, or Gov websites. Do not omit.)
 `;
 
 // HELPER: Sleep/Retry

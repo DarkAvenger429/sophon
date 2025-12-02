@@ -63,7 +63,7 @@ async function callGeminiWithRetry(modelName: string, params: any, retries = 2) 
             }
             
             if (error.status === 503 || error.code === 503) {
-                await sleep(2000 * (i + 1));
+                await sleep(1000 * (i + 1));
                 continue;
             }
             throw error; 
@@ -100,7 +100,7 @@ const generateSimulationReport = (query: string): Report => {
         confidenceScore: 0,
         sourceReliability: 100,
         sources: [
-            { title: "System Alert: Quota / Network Limit", url: "#", category: SourceCategory.UNKNOWN, reliabilityScore: 0, date: new Date().toISOString().split('T')[0] }
+            { title: "System Alert: Quota / Network Limit", url: "https://status.openai.com", category: SourceCategory.UNKNOWN, reliabilityScore: 0, date: new Date().toISOString().split('T')[0] }
         ],
         tags: ["Simulation", "Failsafe_Active", "System_Alert"],
         originSector: "SIMULATION_CORE",
@@ -142,35 +142,35 @@ const generateSimulatedNews = () => [
         summary: "Major indices hit record highs as AI sector continues to outperform expectations. Investors are optimistic about future growth.",
         source: "Reuters (Simulated)",
         time: "10m ago",
-        url: "#"
+        url: "https://news.google.com/search?q=Global+Markets+Rally"
     },
     {
         headline: "New Climate Accord Signed in Paris",
         summary: "190 nations agree to aggressive carbon reduction targets for 2030, aiming to limit global warming to 1.5 degrees Celsius.",
         source: "AP (Simulated)",
         time: "1h ago",
-        url: "#"
+        url: "https://news.google.com/search?q=Paris+Climate+Accord"
     },
     {
         headline: "Breakthrough in Fusion Energy Announced",
         summary: "Scientists achieve net energy gain in latest reactor tests, marking a significant milestone towards limitless clean energy.",
         source: "Science Daily (Simulated)",
         time: "2h ago",
-        url: "#"
+        url: "https://news.google.com/search?q=Fusion+Energy+Breakthrough"
     },
     {
         headline: "Cyberattack Targets Financial Infrastructure",
         summary: "Coordinated DDOS attacks reported across multiple banking sectors. Cybersecurity teams are investigating the origin.",
         source: "CyberWire (Simulated)",
         time: "Breaking",
-        url: "#"
+        url: "https://news.google.com/search?q=Bank+Cyberattack"
     },
     {
         headline: "SpaceX Launches Next Gen Satellites",
         summary: "Successful deployment of Starlink V2 constellation confirmed. Coverage expected to improve in remote regions.",
         source: "SpaceNews (Simulated)",
         time: "4h ago",
-        url: "#"
+        url: "https://news.google.com/search?q=SpaceX+Launch"
     }
 ];
 
@@ -202,7 +202,6 @@ export const scanForTopics = async (focus?: string): Promise<{ query: string, se
     try {
         const results = JSON.parse(text);
         if (Array.isArray(results) && results.length > 0) return results;
-        // Fallback if array is empty
         return [
             { query: "Simulated: Market Volatility", sector: "GLOBAL_NEWS" },
             { query: "Simulated: Tech Leak Rumors", sector: "REDDIT_HIVE" }
@@ -225,7 +224,8 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
         const prompt = `
         List 5 top global news headlines from the last 12 hours.
         For each, provide a VERY SHORT summary (max 15 words).
-        Format as a JSON Array of objects: [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "..."}].
+        Ensure the 'url' field contains a valid, direct HTTPS link to the source.
+        Format as a JSON Array of objects: [{"headline": "...", "summary": "...", "source": "...", "time": "...", "url": "https://..."}].
         Use reliable sources.
         `;
         const response = await callGeminiWithRetry('gemini-2.5-flash', {
@@ -258,12 +258,14 @@ export const fetchGlobalNews = async (): Promise<{headline: string, summary: str
 
 export const investigateTopic = async (query: string, originSector: string = "MANUAL_INPUT", useDeepScan: boolean = false): Promise<Report | null> => {
   try {
-    // PHASE 1: INTELLIGENCE GATHERING (Triangulation)
+    // PHASE 1: PARALLEL TRIANGULATION (Optimization)
+    // Instead of sequential await, we fire all vectors with a staggered delay to prevent rate limits
+    // but drastically reduce total wait time.
     
     const searchVectors = [
-        `"${query}" details verified sources`,                // Vector 1: Facts
-        `"${query}" public reaction twitter reddit sentiment`, // Vector 2: Social Pulse
-        `"${query}" origin first source date`                 // Vector 3: Provenance
+        `"${query}" verified news details`,                   // Vector 1: Facts
+        `"${query}" social sentiment twitter reddit`,         // Vector 2: Social
+        `"${query}" origin source date`                       // Vector 3: Origin
     ];
 
     if (originSector === 'REDDIT_HIVE') searchVectors.push(`site:reddit.com "${query}" discussion`);
@@ -272,45 +274,51 @@ export const investigateTopic = async (query: string, originSector: string = "MA
     let fullEvidenceBuffer = "";
     let validSources: Source[] = [];
 
-    // Execute vectors sequentially with delay to be polite to API
-    for (const vector of searchVectors) {
-        await sleep(1000); // 1s delay to prevent rate limit spikes
+    // Helper to run a single vector search
+    const fetchVector = async (vector: string, delay: number) => {
+        await sleep(delay); // Stagger requests
+        try {
+            const searchRes = await callGeminiWithRetry('gemini-2.5-flash', {
+                contents: `Find precise information for: ${vector}`,
+                config: { tools: [{ googleSearch: {} }] }
+            });
 
-        const searchRes = await callGeminiWithRetry('gemini-2.5-flash', {
-            contents: `Find precise information for: ${vector}`,
-            config: { tools: [{ googleSearch: {} }] }
-        });
-
-        // Harvest Sources
-        const chunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        chunks.forEach((chunk: any) => {
-            if (chunk.web?.uri && chunk.web?.title) {
-                const url = chunk.web.uri;
-                const check = checkBadActor(url);
-                
-                if (!validSources.some(s => s.url === url)) {
-                    validSources.push({
-                        title: chunk.web.title,
-                        url: url,
-                        category: check.isSuspicious ? SourceCategory.UNKNOWN : SourceCategory.NEWS,
-                        reliabilityScore: Math.max(0, 100 - check.scorePenalty),
-                    });
+            // Harvest Sources
+            const chunks = searchRes.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            chunks.forEach((chunk: any) => {
+                if (chunk.web?.uri && chunk.web?.title) {
+                    const url = chunk.web.uri;
+                    const check = checkBadActor(url);
+                    // Thread-safe push (JS is single threaded event loop, this is safe)
+                    if (!validSources.some(s => s.url === url)) {
+                        validSources.push({
+                            title: chunk.web.title,
+                            url: url,
+                            category: check.isSuspicious ? SourceCategory.UNKNOWN : SourceCategory.NEWS,
+                            reliabilityScore: Math.max(0, 100 - check.scorePenalty),
+                        });
+                    }
                 }
-            }
-        });
+            });
 
-        if (searchRes.text) {
-             fullEvidenceBuffer += `\n[SEARCH VECTOR: ${vector}]\n${searchRes.text}\n`;
+            if (searchRes.text) {
+                return `\n[SEARCH VECTOR: ${vector}]\n${searchRes.text}\n`;
+            }
+        } catch (e) {
+            console.warn(`Vector failed: ${vector}`);
         }
-    }
+        return "";
+    };
+
+    // Execute all vectors in parallel with staggered starts
+    const results = await Promise.all(searchVectors.map((v, i) => fetchVector(v, i * 600)));
+    fullEvidenceBuffer = results.join("\n");
     
     validSources.sort((a, b) => b.reliabilityScore - a.reliabilityScore);
     const topSources = validSources.slice(0, 8);
 
     if (fullEvidenceBuffer.length < 50) {
         console.warn("Insufficient evidence gathered.");
-        // If evidence is totally empty, we might want to fallback if it's a connection issue, 
-        // but for now we let the model try to say "UNCERTAIN" unless it threw an error.
     }
 
     const currentDate = new Date().toISOString().split('T')[0];
