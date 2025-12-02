@@ -24,6 +24,7 @@ const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
 // --- API KEY POOL (BACKEND) ---
+// The system will rotate through these keys until one works.
 const API_KEY_POOL = [
     'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
     'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
@@ -40,39 +41,40 @@ if (process.env.GEMINI_API_KEY && !API_KEY_POOL.includes(process.env.GEMINI_API_
 // HELPER: Sleep
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// --- SMART ROTATION FOR BACKEND ---
+// --- TOTAL PERSISTENCE CALLER ---
+// Tries every key in the pool. Never gives up easily.
 async function callGemini(modelName, params) {
     let lastError;
-    const startIndex = Math.floor(Math.random() * API_KEY_POOL.length);
+    
+    // Shuffle keys to distribute load on start
+    const shuffledKeys = [...API_KEY_POOL].sort(() => Math.random() - 0.5);
 
-    for (let i = 0; i < API_KEY_POOL.length; i++) {
-        const keyIndex = (startIndex + i) % API_KEY_POOL.length;
-        const currentKey = API_KEY_POOL[keyIndex];
-        const isLastKey = API_KEY_POOL.length === 1 || i === API_KEY_POOL.length - 1;
-
+    for (let i = 0; i < shuffledKeys.length; i++) {
+        const currentKey = shuffledKeys[i];
         const ai = new GoogleGenAI({ apiKey: currentKey });
-        const maxRetries = isLastKey ? 2 : 1; // Don't retry too much on one key if we have others
 
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-            try {
-                return await ai.models.generateContent({
-                    model: modelName,
-                    ...params
-                });
-            } catch (error) {
-                lastError = error;
-                const isQuota = error.status === 429 || error.code === 429 || error.status === 503;
-                
-                if (isQuota) {
-                    console.warn(`⚠️ [Backend] Quota hit on key ${keyIndex}. Rotating...`);
-                    if (isLastKey) await sleep(2000); // Panic wait
-                    break; // Break inner to rotate
-                }
-                if (!isQuota) throw error; // Real error
+        try {
+            console.log(`[Backend] Attempting AI Request with Key #${i+1}...`);
+            const result = await ai.models.generateContent({
+                model: modelName,
+                ...params
+            });
+            return result; // Success! Return immediately.
+        } catch (error) {
+            console.warn(`⚠️ [Backend] Key #${i+1} Failed: ${error.message}`);
+            lastError = error;
+            
+            // If it's a quota error (429), wait a bit before trying the next key
+            if (error.status === 429 || error.code === 429) {
+                await sleep(1500);
             }
+            // Continue to next key loop...
         }
     }
-    throw lastError || new Error("Backend AI Unresponsive");
+    
+    // If we get here, ALL keys failed.
+    console.error("❌ CRITICAL: ALL API KEYS EXHAUSTED.");
+    throw lastError || new Error("All AI Nodes Unresponsive");
 }
 
 let client;
@@ -109,7 +111,6 @@ I verify:
 *Forward any suspicious message to me.*
 `;
 
-// --- SYSTEM PROMPT (BULLETPROOF VERSION) ---
 const SYSTEM_INSTRUCTION = `
 You are Sophon, a Multimodal Intelligence Sentinel.
 
@@ -185,6 +186,14 @@ async function extractContext(base64Data, mimeType) {
                     { inlineData: { mimeType: geminiMimeType, data: base64Data } },
                     { text: prompt }
                 ]
+            },
+            config: {
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
             }
         });
         return response.text;
@@ -194,30 +203,39 @@ async function extractContext(base64Data, mimeType) {
 // STAGE 2: RAG
 async function verifyClaim(claimText, contextHistory = "") {
     try {
-        // Enforce Grounding for Truth
-        const prompt = contextHistory 
+        const promptText = contextHistory 
             ? `HISTORY: ${contextHistory}\n\nCURRENT USER INPUT: "${claimText}"\n\nINSTRUCTION: Verify CURRENT INPUT. Match Language.` 
             : `CURRENT USER INPUT: "${claimText}"`;
 
+        const contents = [
+            {
+                role: 'user',
+                parts: [{ text: promptText }]
+            }
+        ];
+
         const response = await callGemini('gemini-2.5-flash', {
-            contents: prompt,
+            contents: contents,
             config: {
                 tools: [{ googleSearch: {} }],
                 systemInstruction: SYSTEM_INSTRUCTION,
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
             }
         });
 
-        // --- TRUNCATION SAFETY ---
         let finalText = response.text || "";
-        
-        // Twilio limit is 1600. We cut at 1500 to be safe.
         if (finalText.length > 1500) {
             finalText = finalText.substring(0, 1490) + "... [Truncated]";
         }
         return finalText;
     } catch (error) {
-        console.error("RAG Error:", error);
-        return "⚠️ *Error:* System overloaded. Try again.";
+        console.error("RAG Verification Failed:", JSON.stringify(error, null, 2));
+        return "⚠️ *SYSTEM ALERT:* Unable to establish secure link to verifying nodes. Please retry in 30 seconds.";
     }
 }
 
@@ -235,19 +253,31 @@ async function processAndReply(body, mediaUrl, mediaType, sender, recipient) {
         // 2. AUDIO
         else if (mediaUrl && (mediaType.startsWith('audio/') || mediaType.includes('ogg'))) {
             const media = await downloadMedia(mediaUrl);
-            if (!media) replyText = "⚠️ Error downloading audio. Try again.";
+            if (!media) replyText = "⚠️ Error downloading audio.";
             else {
-                const response = await callGemini('gemini-2.5-flash', {
-                    contents: {
-                        parts: [
-                            { inlineData: { mimeType: media.mimeType, data: media.data } },
-                            { text: "Listen to this audio. Transcribe the claim, verify it using Google Search. Analyze the emotional tone. Reply in the spoken language." }
-                        ]
-                    },
-                    config: { tools: [{ googleSearch: {} }], systemInstruction: SYSTEM_INSTRUCTION }
-                });
-                replyText = response.text;
-                if (replyText.length > 1500) replyText = replyText.substring(0, 1490) + "... [Truncated]";
+                try {
+                    const response = await callGemini('gemini-2.5-flash', {
+                        contents: {
+                            parts: [
+                                { inlineData: { mimeType: media.mimeType, data: media.data } },
+                                { text: "Listen to this audio. Transcribe the claim, verify it using Google Search. Analyze the emotional tone. Reply in the spoken language." }
+                            ]
+                        },
+                        config: { 
+                            tools: [{ googleSearch: {} }], 
+                            systemInstruction: SYSTEM_INSTRUCTION,
+                            safetySettings: [
+                                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                            ]
+                        }
+                    });
+                    replyText = response.text;
+                } catch(e) {
+                    replyText = "⚠️ Audio processing interrupted.";
+                }
             }
         }
         // 3. IMAGE & PDF
@@ -273,18 +303,24 @@ async function processAndReply(body, mediaUrl, mediaType, sender, recipient) {
         // --- SEND ASYNC REPLY ---
         if (replyText && client) {
             console.log(`[OUTBOUND] Sending to ${sender}...`);
-            const message = await client.messages.create({
+            await client.messages.create({
                 from: recipient,
                 to: sender,
                 body: replyText
             });
-            console.log(`[OUTBOUND] Success. SID: ${message.sid} | Status: ${message.status}`);
-        } else if (!client) {
-            console.error("❌ Cannot reply: Twilio Client missing (Check Env Vars)");
         }
 
     } catch (error) {
-        console.error("❌ Async Process Error:", error.message || error);
+        console.error("❌ Critical Worker Failure:", error);
+        if (client) {
+            try {
+                await client.messages.create({
+                    from: recipient,
+                    to: sender,
+                    body: "⚠️ Sophon Core Offline. Rebooting..."
+                });
+            } catch(e) { console.error("Could not send failure notice."); }
+        }
     }
 }
 
