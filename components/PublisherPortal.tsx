@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { connectWallet, signHeadline, WalletState } from '../services/web3Service';
 import { searchLedgerSemantically, fetchGlobalNews } from '../services/geminiService';
@@ -232,7 +231,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
       setFormData({
           headline: `${item.headline} (${item.source})`,
           category: 'OFFICIAL',
-          urgency: 'HIGH'
+          urgency: 'CRITICAL'
       });
   };
 
@@ -309,7 +308,7 @@ export const PublisherPortal: React.FC<PublisherPortalProps> = ({ highContrast }
 
       for (const news of wireNews) {
           addMiningLog(`Processing Node: ${news.source}`);
-          const block = await publishToChain(`${news.headline} (${news.source})`, 'OFFICIAL', 'HIGH');
+          const block = await publishToChain(`${news.headline} (${news.source})`, 'OFFICIAL', 'CRITICAL');
           
           if (block) {
               setLedger(prev => {
