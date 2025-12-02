@@ -1,31 +1,5 @@
-
-
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
-
-// --- API KEY LANES ---
-// Separation of concerns to prevent quota contention
-const KEY_NEWS_WIRE = 'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao';
-const KEY_MANUAL = 'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4';
-const KEY_SCANNER = 'AIzaSyATaHMWhes05hsETC3b9wtz5nYAvQYqFP8';
-
-// POOL FOR BACKUP / OVERFLOW
-const BACKUP_POOL = [
-    'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
-    'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ'
-];
-
-// VITE/VERCEL ENVIRONMENT OVERRIDE
-try {
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
-        // @ts-ignore
-        const envKey = import.meta.env.VITE_API_KEY;
-        if (envKey) {
-            BACKUP_POOL.unshift(envKey);
-        }
-    }
-} catch (e) {}
 
 const SYSTEM_INSTRUCTION = `
 You are SOPHON, a Global Situational Awareness Engine.
@@ -93,35 +67,18 @@ type Lane = 'NEWS' | 'MANUAL' | 'SCANNER';
 
 // --- INTELLIGENT DISPATCHER ---
 async function dispatchGeminiCall(modelName: string, params: any, lane: Lane) {
-    let primaryKey;
-    switch (lane) {
-        case 'NEWS': primaryKey = KEY_NEWS_WIRE; break;
-        case 'MANUAL': primaryKey = KEY_MANUAL; break;
-        case 'SCANNER': primaryKey = KEY_SCANNER; break;
+    // The API key must be provided via environment variables.
+    // Hardcoding keys leads to immediate revocation by Google.
+    if (!process.env.API_KEY) {
+        throw new Error("API_KEY not found in environment variables. Please check your .env file or deployment settings.");
     }
 
-    // 1. Try Primary Lane Key
     try {
-        const ai = new GoogleGenAI({ apiKey: primaryKey });
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         return await ai.models.generateContent({ model: modelName, ...params });
     } catch (error: any) {
-        console.warn(`Lane ${lane} Primary Key Failed (${error.status || error.message}). Switching to Backup Pool.`);
-        
-        // 2. Backup Pool Rotation
-        let lastError;
-        for (const backupKey of BACKUP_POOL) {
-            try {
-                const ai = new GoogleGenAI({ apiKey: backupKey });
-                return await ai.models.generateContent({ model: modelName, ...params });
-            } catch (e: any) {
-                lastError = e;
-                if (e.status === 429) {
-                    await sleep(1000); // Backoff for backup keys
-                    continue; 
-                }
-            }
-        }
-        throw lastError || new Error(`All keys exhausted for lane ${lane}`);
+        console.warn(`Gemini Call Failed on Lane ${lane}: ${error.message}`);
+        throw error;
     }
 }
 

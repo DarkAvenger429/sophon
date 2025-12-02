@@ -4,25 +4,13 @@ import { GoogleGenAI } from "@google/genai";
 
 // Initialize AI for Semantic Hashing
 let ai: GoogleGenAI | null = null;
-const fallbackKey = 'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ';
 
 try {
-    // @ts-ignore
-    let key = '';
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
-        // @ts-ignore
-        key = import.meta.env.VITE_API_KEY;
+    if (process.env.API_KEY) {
+        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     }
-    
-    if (!key) key = fallbackKey;
-
-    if(key) ai = new GoogleGenAI({ apiKey: key });
 } catch(e) {
-     // Ensure fallback works if env access fails
-     try {
-        ai = new GoogleGenAI({ apiKey: fallbackKey });
-     } catch(err) {}
+     console.warn("AI Init failed in Web3 Service", e);
 }
 
 export interface WalletState {

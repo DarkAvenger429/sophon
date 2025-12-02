@@ -24,67 +24,31 @@ const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 
 // --- API KEY STRATEGY ---
-// 1. Prioritize Secure Environment Variables (Comma Separated)
-// 2. Fallback to Hardcoded Pool (These are likely leaked/burned, but kept as backup)
-const envKeys = process.env.GEMINI_API_KEYS ? process.env.GEMINI_API_KEYS.split(',').map(k => k.trim()) : [];
-const singleEnvKey = process.env.GEMINI_API_KEY ? [process.env.GEMINI_API_KEY] : [];
-
-const API_KEY_POOL = [
-    ...envKeys,
-    ...singleEnvKey,
-    'AIzaSyDyG3xm2R8hCGILPQRUSE8qvB5TxToC8ao',
-    'AIzaSyDWUPDyt99gXDksDfOAyFy4-kCwITUJuO0',
-    'AIzaSyA8FUSe6Bd7ivMCp5-tiVzBwxarLsgclD4',
-    'AIzaSyATaHMWhes05hsETC3b9wtz5nYAvQYqFP8',
-    'AIzaSyDK2bK1HEvcNdkjrESsJlkinI9sgzqLKPQ'
-];
-
-// Deduplicate
-const UNIQUE_KEYS = [...new Set(API_KEY_POOL)].filter(k => k && k.length > 10);
+// Securely obtained from environment variables only
+const API_KEY = process.env.GEMINI_API_KEY;
 
 // HELPER: Sleep
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 // --- TOTAL PERSISTENCE CALLER ---
 async function callGemini(modelName, params) {
-    let lastError;
-    
-    // Shuffle keys to distribute load
-    const shuffledKeys = [...UNIQUE_KEYS].sort(() => Math.random() - 0.5);
-
-    for (let i = 0; i < shuffledKeys.length; i++) {
-        const currentKey = shuffledKeys[i];
-        const ai = new GoogleGenAI({ apiKey: currentKey });
-
-        try {
-            console.log(`[Backend] Using Key #${i+1} (${currentKey.slice(0,5)}...)...`);
-            const result = await ai.models.generateContent({
-                model: modelName,
-                ...params
-            });
-            return result; // Success!
-        } catch (error) {
-            const status = error.status || error.code;
-            const msg = error.message || "";
-            
-            // LOGIC FOR SPECIFIC ERRORS
-            if (status === 403 || msg.includes('leaked')) {
-                console.error(`⛔ KEY BURNED (Leaked): ${currentKey.slice(0,8)}... Skipping immediately.`);
-                // Do not wait, this key is dead forever.
-            } else if (status === 429) {
-                console.warn(`⏳ QUOTA HIT: ${currentKey.slice(0,8)}... Waiting 1s.`);
-                await sleep(1000);
-            } else {
-                console.warn(`⚠️ API Error (${status}): ${msg}`);
-            }
-            
-            lastError = error;
-        }
+    if (!API_KEY) {
+        console.error("❌ CRITICAL: GEMINI_API_KEY missing in environment variables.");
+        throw new Error("Server Misconfiguration: Missing API Key");
     }
-    
-    // If we get here, ALL keys failed.
-    console.error("❌ CRITICAL: ALL API KEYS EXHAUSTED.");
-    throw lastError || new Error("All AI Nodes Unresponsive");
+
+    const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+    try {
+        const result = await ai.models.generateContent({
+            model: modelName,
+            ...params
+        });
+        return result; 
+    } catch (error) {
+        console.warn(`⚠️ API Error: ${error.message}`);
+        throw error;
+    }
 }
 
 let client;
@@ -245,11 +209,6 @@ async function verifyClaim(claimText, contextHistory = "") {
         return finalText;
     } catch (error) {
         console.error("RAG Verification Failed:", JSON.stringify(error, null, 2));
-        
-        // Handle 403 specifically to inform user
-        if (error.status === 403 || (error.message && error.message.includes('leaked'))) {
-            return "⚠️ *SYSTEM ALERT:* API Keys have been revoked by Google security. Please update `GEMINI_API_KEYS` in Render Dashboard with a fresh key.";
-        }
         
         return "⚠️ *SYSTEM ALERT:* Unable to establish secure link to verifying nodes. Please retry in 30 seconds.";
     }
