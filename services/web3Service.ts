@@ -140,10 +140,9 @@ export const signHeadline = async (headline: string): Promise<{ signature: strin
         return { signature, hash, fact: canonicalFact };
 
     } catch (signingError) {
-        // If user rejects or signing fails, fall back to simulation for demo purposes
-        console.warn("Signing failed/rejected, simulating signature.");
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return { signature: "0xSIMULATED_SIGNATURE_" + hash, hash, fact: canonicalFact };
+        // CRITICAL: If user rejects, return NULL so we don't mine a fake block
+        console.warn("Signing cancelled by user.");
+        return null;
     }
 
   } catch (error) {
