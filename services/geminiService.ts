@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { Report, VerdictType, Source, SourceCategory, KeyEvidence } from "../types";
 
@@ -356,7 +355,29 @@ export const investigateTopic = async (query: string, originSector: string = "MA
 
 // ... (Rest of exports remain mostly the same, ensuring compatibility)
 export const searchLedgerSemantically = async (q: string, h: any[]) => [];
-export const verifyCommunityNote = async () => false;
+
+export const verifyCommunityNote = async (note: string, context: string): Promise<boolean> => {
+    try {
+        const prompt = `
+        Verify if this community note provides helpful, accurate context or corrections to the claim.
+        
+        CLAIM/CONTEXT: "${context}"
+        PROPOSED NOTE: "${note}"
+        
+        Rule: Return "TRUE" if the note is factually accurate, relevant, and neutral. Return "FALSE" if it is spam, opinion, or irrelevant.
+        `;
+        
+        const response = await callGeminiWithRetry('gemini-2.5-flash', {
+            contents: prompt
+        });
+        
+        const text = response.text?.trim().toUpperCase() || "";
+        return text.includes("TRUE");
+    } catch (e) {
+        return false;
+    }
+};
+
 export const analyzeManualQuery = async (q: string, deep: boolean) => investigateTopic(q, "USER_INPUT", deep);
 export const analyzeImageClaim = async (b64: string, mime: string) => investigateTopic("Visual Analysis", "FORENSIC", true); 
 export const analyzeAudioClaim = async (b64: string, mime: string) => investigateTopic("Audio Analysis", "FORENSIC", true);
